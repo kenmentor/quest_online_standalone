@@ -446,7 +446,7 @@ export default function Home() {
         shareLink={shareLink}
         onCopyShareLink={copyShareLink}
         totalClients={totalClients}
-        removingTag={removingTag}
+        // removingTag={removingTag}
       />
       <CenterPanel
         engineState={engineState}
