@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --color-bg-app: #030303;
+  --color-bg-sidebar: #080808;
+  --color-bg-surface: #050505;
+  --color-border-sidebar: #1a1a1a;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #888888;
+  --color-text-muted: #666666;
+  --color-text-label: #888888;
+  --color-surface: #000000;
+  --color-surface-hover: #1a1a1a;
+  --color-border: #333333;
+  --color-border-light: #1a1a1a;
+  --color-accent: #ffffff;
+  --color-accent-hover: #cccccc;
+  --color-status-neutral: #888888;
+  --color-status-active: #ffffff;
+  --color-slow: #ef4444;
+  --color-medium: #f59e0b;
+  --color-feed-source: #888888;
+  --color-feed-target: #ffffff;
+}
+
+.light {
+  --color-bg-app: #ffffff;
+  --color-bg-sidebar: #f8fafc;
+  --color-bg-surface: #f1f5f9;
+  --color-border-sidebar: #e2e8f0;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #64748b;
+  --color-text-muted: #64748b;
+  --color-text-label: #64748b;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f1f5f9;
+  --color-border: #cbd5e1;
+  --color-border-light: #e2e8f0;
+  --color-accent: #0f172a;
+  --color-accent-hover: #334155;
+  --color-status-neutral: #64748b;
+  --color-status-active: #0f172a;
+  --color-slow: #ef4444;
+  --color-medium: #f59e0b;
+  --color-feed-source: #64748b;
+  --color-feed-target: #0f172a;
+}
+
+body {
+  background: var(--color-bg-app);
+  color: var(--color-text-primary);
+  font-family: 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.4s ease-out;
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 4px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 2px; }
