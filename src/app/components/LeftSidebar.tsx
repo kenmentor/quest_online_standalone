@@ -18,9 +18,10 @@ interface LeftSidebarProps {
   shareLink: string;
   onCopyShareLink: () => void;
   totalClients: number;
+  removingTag: string | null;
 }
 
-export default function LeftSidebar({ isDark, onToggleTheme, instances, selectedTag, onSelectInstance, onNewInstance, onRemoveInstance, logs, addBtnEnabled, engineState, userName, onLogout, shareLink, onCopyShareLink, totalClients }: LeftSidebarProps) {
+export default function LeftSidebar({ isDark, onToggleTheme, instances, selectedTag, onSelectInstance, onNewInstance, onRemoveInstance, logs, addBtnEnabled, engineState, userName, onLogout, shareLink, onCopyShareLink, totalClients, removingTag }: LeftSidebarProps) {
   const canAdd = addBtnEnabled && engineState !== "INIT";
 
   return (
@@ -66,8 +67,13 @@ export default function LeftSidebar({ isDark, onToggleTheme, instances, selected
               <button onClick={(e) => { e.stopPropagation(); onRemoveInstance(inst.tag); }}
                 title={`Remove ${inst.name}`}
                 className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded"
-                style={{ width: "24px", height: "24px", color: "#ef4444", cursor: "pointer" }}>
-                <Trash2 style={{ width: "14px", height: "14px" }} />
+                style={{ width: "24px", height: "24px", color: "#ef4444", cursor: removingTag === inst.tag ? "wait" : "pointer" }}
+                disabled={removingTag === inst.tag}>
+                {removingTag === inst.tag ? (
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: "#ef4444", borderTopColor: "transparent" }} />
+                ) : (
+                  <Trash2 style={{ width: "14px", height: "14px" }} />
+                )}
               </button>
             </div>
           );
