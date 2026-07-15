@@ -26,7 +26,7 @@ export default function AuthPage() {
         : await auth.signup(username, password);
       localStorage.setItem("auth_token", res.token);
       localStorage.setItem("auth_user", JSON.stringify(res.user));
-      router.push("/");
+      router.replace("/");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Something went wrong";
       setError(msg);

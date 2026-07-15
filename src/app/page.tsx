@@ -14,10 +14,7 @@ const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "
 
 export default function Home() {
   const router = useRouter();
-  const [phase, setPhase] = useState<"startup" | "console">(() => {
-    if (typeof window === "undefined") return "startup";
-    return localStorage.getItem("mic_config") ? "console" : "startup";
-  });
+  const [phase, setPhase] = useState<"startup" | "console">("startup");
   const [authed, setAuthed] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [isDark, setIsDark] = useState(true);
@@ -59,30 +56,35 @@ export default function Home() {
   const wsLogsRef = useRef<WebSocket | null>(null);
   const audioWsRef = useRef<WebSocket | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioProcessorRef = useRef<ScriptProcessorNode | null>(null);
+  const audioSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const loggingOutRef = useRef(false);
   const engineStateRef = useRef(engineState);
   engineStateRef.current = engineState;
 
-  // Auth check
+  // Auth check — runs once on mount
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
-    const user = localStorage.getItem("auth_user");
     if (!token) {
       router.replace("/auth");
       return;
     }
-    let userData = null;
-    try { userData = user ? JSON.parse(user) : null; } catch {}
-    setUserName(userData?.username ?? "");
-    setUserId(userData?.id ?? "");
-    authApi.me().then(() => {
+    let cancelled = false;
+    authApi.me().then((res) => {
+      if (cancelled) return;
+      setUserName(res.user.username);
+      setUserId(res.user.id);
       setAuthed(true);
       setCheckingAuth(false);
     }).catch(() => {
+      if (cancelled) return;
       localStorage.removeItem("auth_token");
       localStorage.removeItem("auth_user");
       router.replace("/auth");
     });
-  }, [router]);
+    return () => { cancelled = true; };
+  }, []);
 
   const showToast = useCallback((m: string, level: "info" | "error" = "error") => {
     const id = ++toastIdRef.current;
@@ -91,7 +93,10 @@ export default function Home() {
 
   const removeToast = useCallback((id: number) => setToasts(p => p.filter(t => t.id !== id)), []);
 
-  const addLog = useCallback((t: string) => setLogs(p => [...p, t]), []);
+  const addLog = useCallback((t: string) => setLogs(p => {
+    const next = [...p, t];
+    return next.length > 500 ? next.slice(-500) : next;
+  }), []);
 
   // Clean up audio resources on unmount (survives SPA navigation)
   useEffect(() => {
@@ -100,6 +105,18 @@ export default function Home() {
       audioWsRef.current = null;
       audioStreamRef.current?.getTracks().forEach((t) => t.stop());
       audioStreamRef.current = null;
+      audioProcessorRef.current?.disconnect();
+      audioProcessorRef.current = null;
+      audioSourceNodeRef.current?.disconnect();
+      audioSourceNodeRef.current = null;
+      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+        audioContextRef.current.close().catch(() => {});
+      }
+      audioContextRef.current = null;
+      wsTranscriptsRef.current?.close();
+      wsTranscriptsRef.current = null;
+      wsLogsRef.current?.close();
+      wsLogsRef.current = null;
     };
   }, []);
 
@@ -125,9 +142,33 @@ export default function Home() {
   }, [engineState, spinnerChar]);
 
   const handleLogout = useCallback(async () => {
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    stopAudioCapture();
+    wsTranscriptsRef.current?.close();
+    wsTranscriptsRef.current = null;
+    wsLogsRef.current?.close();
+    wsLogsRef.current = null;
+    setAuthed(false);
+    setPhase("startup");
+    setInstances([]);
+    setTranscripts([]);
+    setLogs([]);
+    setLangTags([]);
+    setSelectedTag(null);
+    setCurrentViewTag(null);
+    setUserName("");
+    setUserId("");
+    setTotalClients(0);
+    setEngineState("IDLE");
+    setStatBadge("STATUS: DISCONNECTED");
+    setStatBadgeType("neutral");
     try { await authApi.logout(); } catch {}
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
+    localStorage.removeItem("mic_config");
+    localStorage.removeItem("selected_tag");
+    loggingOutRef.current = false;
     router.replace("/auth");
   }, [router]);
 
@@ -176,7 +217,6 @@ export default function Home() {
     }
   }, [engineState, instances.length, showToast, addLog]);
 
-  let audioContextInstance: AudioContext | null = null;
   function startAudioCapture() {
     if (!micConfig) return;
     navigator.mediaDevices.getUserMedia({
@@ -197,26 +237,32 @@ export default function Home() {
       ws.onopen = () => { ready = true; addLog("[INFO] Audio WebSocket connected."); };
       ws.onerror = () => addLog("[ERROR] Audio WebSocket error.");
 
-      audioContextInstance = new AudioContext({ sampleRate: 16000 });
-      const source = audioContextInstance.createMediaStreamSource(stream);
-      const processor = audioContextInstance.createScriptProcessor(4096, 1, 1);
-      source.connect(processor);
-      processor.onaudioprocess = (e) => {
-        if (!ready) return;
-        if (ws.readyState !== WebSocket.OPEN) return;
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-        try { ws.send(pcm.buffer); } catch {}
-      };
+      const ctx = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = ctx;
+      ctx.resume().then(() => {
+        const source = ctx.createMediaStreamSource(stream);
+        audioSourceNodeRef.current = source;
+        const processor = ctx.createScriptProcessor(4096, 1, 1);
+        audioProcessorRef.current = processor;
+        source.connect(processor);
+        processor.connect(ctx.destination);
+        processor.onaudioprocess = (e) => {
+          if (!ready) return;
+          if (ws.readyState !== WebSocket.OPEN) return;
+          const input = e.inputBuffer.getChannelData(0);
+          const pcm = new Int16Array(input.length);
+          for (let i = 0; i < input.length; i++) {
+            const s = Math.max(-1, Math.min(1, input[i]));
+            pcm[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          try { ws.send(pcm.buffer); } catch {}
+        };
+        addLog("[INFO] Audio capture started (mic streaming).");
+      });
       ws.onclose = () => {
         ready = false;
         addLog("[WARN] Audio WebSocket disconnected.");
       };
-      ws.onerror = () => addLog("[ERROR] Audio WebSocket error.");
     }).catch((e) => {
       showToast(`ERROR: Could not access microphone: ${e instanceof Error ? e.message : e}`, "error");
       addLog(`[ERROR] Microphone access denied: ${e instanceof Error ? e.message : e}`);
@@ -228,10 +274,14 @@ export default function Home() {
     audioWsRef.current = null;
     audioStreamRef.current?.getTracks().forEach((t) => t.stop());
     audioStreamRef.current = null;
-    if (audioContextInstance) {
-      audioContextInstance.close().catch(() => {});
-      audioContextInstance = null;
+    audioProcessorRef.current?.disconnect();
+    audioProcessorRef.current = null;
+    audioSourceNodeRef.current?.disconnect();
+    audioSourceNodeRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== "closed") {
+      audioContextRef.current.close().catch(() => {});
     }
+    audioContextRef.current = null;
   }
 
   const handleLaunch = useCallback((c: { deviceId: string; deviceName: string; threshold: number }) => {
@@ -243,7 +293,14 @@ export default function Home() {
   }, [showToast, addLog]);
 
   const addInstance = useCallback(async (tag: string, name: string, modelName: string, modelPath: string, modelJsonPath: string, modelLevel: string) => {
-    if (instances.some(i => i.tag === tag)) { showToast(`ERROR: Instance for '${name}' is already active.`, "error"); return; }
+    let nextInstances: typeof instances = [];
+    setInstances(prev => {
+      if (prev.some(i => i.tag === tag)) return prev;
+      const newInst = { tag, name, modelName, clients: 0, roomName: `${name.toLowerCase().replace(' ', '-')}-room` };
+      nextInstances = [...prev, newInst];
+      return nextInstances;
+    });
+    if (nextInstances.length === 0) { showToast(`ERROR: Instance for '${name}' is already active.`, "error"); return; }
     try {
       await api.addEngine({
         language_tag: tag,
@@ -253,19 +310,17 @@ export default function Home() {
         model_json_path: modelJsonPath,
         model_level: modelLevel,
       });
-      const roomName = `${name.toLowerCase().replace(' ', '-')}-room`;
-      const newInst = { tag, name, modelName, clients: 0, roomName };
-      const next = [...instances, newInst];
-      setInstances(next);
       setLangTags(p => [...p, { tag, name }]);
       showToast(`Added engine: ${name} (${tag})`, "info");
       addLog(`[INFO] Added engine: ${name} (${tag})`);
-      if (next.length === 1) { setSelectedTag(tag); setCurrentViewTag(tag); }
+      if (nextInstances.length === 1) { setSelectedTag(tag); setCurrentViewTag(tag); }
     } catch (e: unknown) {
       showToast(`ERROR: Failed to add engine: ${e instanceof Error ? e.message : e}`, "error");
+      setInstances(prev => prev.filter(i => i.tag !== tag));
+      setLangTags(p => p.filter(i => i.tag !== tag));
     }
     setShowConfigPopup(false);
-  }, [instances, showToast, addLog]);
+  }, [showToast, addLog]);
 
   const removeInstance = useCallback(async (tag: string) => {
     if (removingTag) return;
@@ -273,8 +328,11 @@ export default function Home() {
     const inst = instances.find(i => i.tag === tag);
     try {
       await api.removeEngine(tag);
-      const remaining = instances.filter(i => i.tag !== tag);
-      setInstances(remaining);
+      let remaining: typeof instances = [];
+      setInstances(prev => {
+        remaining = prev.filter(i => i.tag !== tag);
+        return remaining;
+      });
       setLangTags(p => p.filter(i => i.tag !== tag));
       if (selectedTag === tag) {
         setSelectedTag(remaining.length > 0 ? remaining[0].tag : null);
@@ -282,8 +340,7 @@ export default function Home() {
       }
       showToast(`Removed engine: ${inst?.name ?? tag}`, "info");
       addLog(`[INFO] Removed engine: ${inst?.name ?? tag}`);
-      // Auto-stop if last instance removed while recording
-      if (remaining.length === 0 && (engineState === "RECORDING" || engineState === "PAUSED")) {
+      if (remaining.length === 0 && (engineStateRef.current === "RECORDING" || engineStateRef.current === "PAUSED")) {
         addLog("[INFO] No instances left — auto-stopping recording.");
         await api.stopListening();
         stopAudioCapture();
@@ -298,7 +355,7 @@ export default function Home() {
     } finally {
       setRemovingTag(null);
     }
-  }, [instances, selectedTag, engineState, showToast, addLog, removingTag]);
+  }, [selectedTag, showToast, addLog, removingTag]);
 
   const selectInstance = useCallback((tag: string) => {
     setSelectedTag(tag);
@@ -400,32 +457,66 @@ export default function Home() {
     addLog(`[DEBUG] Frontend URL overidden to: ${url}`);
   }, [debugUrlInput, showToast, addLog]);
 
-  // Transcripts WebSocket
+  // Transcripts WebSocket (with reconnect on unexpected close)
   useEffect(() => {
     if (phase !== "console" || !authed) return;
-    wsTranscriptsRef.current = connectTranscripts(
-      (source) => {
-        setTranscripts(prev => {
-          if (prev.some(e => e.source === source)) return prev;
-          return [...prev, { source, translations: {} }];
-        });
-      },
-      (tag, source, translated) => {
-        setTranscripts(prev => prev.map(e =>
-          e.source === source ? { ...e, translations: { ...e.translations, [tag]: translated } } : e
-        ));
-      },
-    );
-    return () => { wsTranscriptsRef.current?.close(); };
+    let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    function connect() {
+      if (cancelled) return;
+      wsTranscriptsRef.current = connectTranscripts(
+        (source) => {
+          setTranscripts(prev => {
+            if (prev.some(e => e.source === source)) return prev;
+            const next = [...prev, { source, translations: {} }];
+            return next.length > 200 ? next.slice(-200) : next;
+          });
+        },
+        (tag, source, translated) => {
+          setTranscripts(prev => prev.map(e =>
+            e.source === source ? { ...e, translations: { ...e.translations, [tag]: translated } } : e
+          ));
+        },
+      );
+      wsTranscriptsRef.current.onclose = (e) => {
+        if (!cancelled && e.code !== 1000) {
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
+    }
+    connect();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsTranscriptsRef.current?.close();
+    };
   }, [phase, authed]);
 
-  // Logs WebSocket
+  // Logs WebSocket (with reconnect on unexpected close)
   useEffect(() => {
     if (phase !== "console" || !authed) return;
-    wsLogsRef.current = connectLogs((entry) => {
-      setLogs(prev => [...prev, entry]);
-    });
-    return () => { wsLogsRef.current?.close(); };
+    let cancelled = false;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    function connect() {
+      if (cancelled) return;
+      wsLogsRef.current = connectLogs((entry) => {
+        setLogs(prev => {
+          const next = [...prev, entry];
+          return next.length > 500 ? next.slice(-500) : next;
+        });
+      });
+      wsLogsRef.current.onclose = (e) => {
+        if (!cancelled && e.code !== 1000) {
+          reconnectTimer = setTimeout(connect, 2000);
+        }
+      };
+    }
+    connect();
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      wsLogsRef.current?.close();
+    };
   }, [phase, authed]);
 
   // Status polling for clients / instance info
@@ -433,19 +524,19 @@ export default function Home() {
     if (phase !== "console" || !authed) return;
     let cancelled = false;
     const poll = async () => {
+      if (document.hidden) return;
       try {
         const status = await api.getStatus();
+        if (cancelled || document.hidden) return;
         setTotalClients(status.total_clients ?? 0);
         setInstances(prev => prev.map(inst => {
           const serverInst = status.engines.find((e: { tag: string }) => e.tag === inst.tag);
           return { ...inst, clients: serverInst?.clients ?? 0, roomName: serverInst?.room_name ?? inst.roomName };
         }));
-        if (!cancelled) {
-          if (status.state === "RECORDING" && engineStateRef.current !== "RECORDING" && engineStateRef.current !== "INIT" && engineStateRef.current !== "PAUSED") {
-            setEngineState("RECORDING");
-            setStatBadge("STATUS: LISTENING");
-            setStatBadgeType("active");
-          }
+        if (status.state === "RECORDING" && engineStateRef.current !== "RECORDING" && engineStateRef.current !== "INIT" && engineStateRef.current !== "PAUSED") {
+          setEngineState("RECORDING");
+          setStatBadge("STATUS: LISTENING");
+          setStatBadgeType("active");
         }
       } catch {}
     };
@@ -458,7 +549,7 @@ export default function Home() {
 
   const currentInst = instances.find(i => i.tag === selectedTag);
 
-  if (phase === "startup") return <ConfigWizard onLaunch={handleLaunch} />;
+  if (phase === "startup" && authed) return <ConfigWizard onLaunch={handleLaunch} />;
 
   return (
     <div className="h-full flex overflow-hidden" style={{ background: "var(--color-bg-app)" }}>

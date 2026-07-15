@@ -44,16 +44,32 @@ async function req<T>(method: string, path: string, body?: unknown, auth = false
     const token = getToken();
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`${res.status} ${res.statusText}: ${text}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      let detail = '';
+      try {
+        const json = await res.json();
+        detail = json.detail || '';
+      } catch {}
+      throw new Error(detail || `${res.status} ${res.statusText}`);
+    }
+    return res.json();
+  } catch (e: unknown) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
   }
-  return res.json();
 }
 
 function authReq<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -94,8 +110,6 @@ export const auth = {
   logout: () => authReq<{ status: string }>('POST', '/api/auth/logout'),
 
   me: () => authReq<{ user: { id: string; username: string } }>('GET', '/api/auth/me'),
-
-  getConfig: () => req<{ frontend_url: string }>('GET', '/api/auth/config'),
 };
 
 function wsAuthSuffix(): string {
@@ -126,8 +140,9 @@ export function connectLogs(onLog: (entry: string) => void): WebSocket {
 
 export async function getBrowserMics(): Promise<MediaDeviceInfo[]> {
   try {
-    await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const devices = await navigator.mediaDevices.enumerateDevices();
+    stream.getTracks().forEach((t) => t.stop());
     return devices.filter((d) => d.kind === 'audioinput');
   } catch {
     return [];

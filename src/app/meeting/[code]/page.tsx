@@ -766,6 +766,11 @@ export default function MeetingPage() {
             const ctx = audioContextRef.current;
             if (ctx && ctx.state !== "closed") {
               try {
+                // Disconnect previous source to prevent leak
+                if (audioSourceRef.current) {
+                  try { audioSourceRef.current.disconnect(); } catch {}
+                  audioSourceRef.current = null;
+                }
                 const stream = new MediaStream([track.mediaStreamTrack]);
                 const source = ctx.createMediaStreamSource(stream);
                 source.connect(ctx.destination);
@@ -940,6 +945,30 @@ export default function MeetingPage() {
       roomRef.current = null;
     }
     isReconnectingRef.current = false;
+    cleanupAudioResources({
+      audioRef,
+      keepAliveRef,
+      keepPlayingIntervalRef,
+      audioContextRef,
+      audioSourceRef,
+    });
+    if (keepaliveOscRef.current) {
+      try { keepaliveOscRef.current.stop(); } catch {}
+      try { keepaliveOscRef.current.disconnect(); } catch {}
+      keepaliveOscRef.current = null;
+    }
+    if (keepaliveGainRef.current) {
+      try { keepaliveGainRef.current.disconnect(); } catch {}
+      keepaliveGainRef.current = null;
+    }
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop());
+      micStreamRef.current = null;
+    }
+    setIsMicOn(false);
+    if ("mediaSession" in navigator) {
+      navigator.mediaSession.metadata = null;
+    }
     router.push("/");
   }, [router]);
 
