@@ -35,7 +35,7 @@ export default function AudioTestPage() {
     setRunning(true);
     setAudioLevel(0);
     setPcmSent(0);
-    const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://3c6a-105-116-13-159.ngrok-free.app";
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "https://0b73-105-116-13-159.ngrok-free.app";
 
     // ── STEP 1: Backend reachable ──
     addResult({ name: "Backend reachable", status: "running", detail: `GET ${apiBase}/api/status` });

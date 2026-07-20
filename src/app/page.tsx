@@ -228,7 +228,7 @@ export default function Home() {
       },
     }).then((stream) => {
       audioStreamRef.current = stream;
-      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, 'ws') || 'wss://3c6a-105-116-13-159.ngrok-free.app';
+      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, 'ws') || 'wss://0b73-105-116-13-159.ngrok-free.app';
       const token = localStorage.getItem('auth_token') || '';
       const ws = new WebSocket(`${wsUrl}/api/ws/audio?token=${encodeURIComponent(token)}`);
       audioWsRef.current = ws;

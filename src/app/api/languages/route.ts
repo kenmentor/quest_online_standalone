@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const STEFIE_API_URL = process.env.NEXT_PUBLIC_STEFIE_API_URL || 'https://3c6a-105-116-13-159.ngrok-free.app';
+const STEFIE_API_URL = process.env.NEXT_PUBLIC_STEFIE_API_URL || 'https://0b73-105-116-13-159.ngrok-free.app';
 
 export async function GET() {
   try {
