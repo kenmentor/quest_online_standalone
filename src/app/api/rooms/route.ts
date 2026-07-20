@@ -4,7 +4,7 @@ import { RoomServiceClient } from 'livekit-server-sdk';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
 const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || 'http://localhost:7880';
-const STEFIE_API_URL = process.env.NEXT_PUBLIC_STEFIE_API_URL || 'http://localhost:8080';
+const STEFIE_API_URL = process.env.NEXT_PUBLIC_STEFIE_API_URL || 'https://3c6a-105-116-13-159.ngrok-free.app';
 
 export async function GET(request: NextRequest) {
   const prefix = request.nextUrl.searchParams.get('prefix') || '';

@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://3c6a-105-116-13-159.ngrok-free.app';
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
 function getToken(): string | null {
