@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useEffect } from "react";
 import TranscriptItem from "./TranscriptItem";
 
 interface CenterPanelProps {
@@ -15,6 +16,14 @@ interface CenterPanelProps {
 }
 
 export default function CenterPanel({ engineState, statBadge, statBadgeType, onEngineAction, langTags, currentViewTag, onSwitchView, transcripts, btnText }: CenterPanelProps) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [transcripts]);
+
   const getBtnStyle = () => {
     switch (engineState) {
       case "INIT": return { background: "#3b82f6", color: "#ffffff", border: "1px solid #3b82f6" };
@@ -65,7 +74,7 @@ export default function CenterPanel({ engineState, statBadge, statBadgeType, onE
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto space-y-4 scrollbar-thin">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-4 scrollbar-thin">
         {transcripts.length === 0 && <p className="text-xs italic" style={{ color: "var(--color-text-secondary)" }}>Waiting for speech input...</p>}
         {transcripts.map((t, i) => <TranscriptItem key={i} source={t.source} translations={t.translations} currentViewTag={currentViewTag} />)}
       </div>
