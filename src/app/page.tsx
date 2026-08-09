@@ -44,6 +44,7 @@ export default function Home() {
   const [speed, setSpeed] = useState({ dl: "–", dlBadge: "–", dlType: "–", ul: "–", ulBadge: "–", ulType: "–" });
   const [btnText, setBtnText] = useState("INITIALIZE LISTENING");
   const [frontendUrl, setFrontendUrl] = useState("http://localhost:3001");
+  const [receiverUrl, setReceiverUrl] = useState("");
   const [shareLink, setShareLink] = useState("");
   const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState("");
@@ -388,8 +389,9 @@ export default function Home() {
     const inst = instances.find(i => i.tag === selectedTag);
     if (!inst) { setShareLink(""); return; }
     const roomPrefix = userId.slice(0, 8);
-    setShareLink(`${frontendUrl}/?id=${roomPrefix}`);
-  }, [selectedTag, instances, frontendUrl, userId]);
+    const base = (receiverUrl || frontendUrl).replace(/\/+$/, "");
+    setShareLink(`${base}/?id=${roomPrefix}`);
+  }, [selectedTag, instances, frontendUrl, receiverUrl, userId]);
 
   const copyShareLink = useCallback(() => {
     if (!shareLink) return;
@@ -436,6 +438,7 @@ export default function Home() {
     }).catch(() => {});
     api.getConfig().then((cfg) => {
       if (cfg.frontend_url) setFrontendUrl(cfg.frontend_url);
+      if (cfg.receiver_url) setReceiverUrl(cfg.receiver_url);
     }).catch(() => {});
   }, [phase, authed, addLog]);
 
@@ -456,22 +459,22 @@ export default function Home() {
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === "8") {
         e.preventDefault();
-        setDebugUrlInput(frontendUrl);
+        setDebugUrlInput(receiverUrl || frontendUrl);
         setShowUrlDebug(p => !p);
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [frontendUrl]);
+  }, [frontendUrl, receiverUrl]);
 
   const applyDebugUrl = useCallback(() => {
     let url = debugUrlInput.trim();
     if (!url) return;
     if (!url.startsWith("http")) url = `http://${url}`;
-    setFrontendUrl(url);
+    setReceiverUrl(url);
     setShowUrlDebug(false);
-    showToast(`Frontend URL set to: ${url}`, "info");
-    addLog(`[DEBUG] Frontend URL overidden to: ${url}`);
+    showToast(`Share link URL set to: ${url}`, "info");
+    addLog(`[DEBUG] Share link URL overidden to: ${url}`);
   }, [debugUrlInput, showToast, addLog]);
 
   // Transcripts WebSocket (with reconnect on unexpected close)
@@ -641,7 +644,7 @@ export default function Home() {
       {showUrlDebug && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowUrlDebug(false)}>
           <div className="w-[420px] rounded-sm shadow-xl p-4 space-y-3" style={{ background: "var(--color-bg-app)", border: "1px solid var(--color-border)" }} onClick={e => e.stopPropagation()}>
-            <p className="text-[10px] font-extrabold tracking-widest uppercase" style={{ color: "var(--color-text-muted)" }}>DEBUG: Frontend URL Override</p>
+            <p className="text-[10px] font-extrabold tracking-widest uppercase" style={{ color: "var(--color-text-muted)" }}>DEBUG: Share Link URL Override</p>
             <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>Enter the listener app URL for share links (Ctrl+8 to toggle)</p>
             <input value={debugUrlInput} onChange={e => setDebugUrlInput(e.target.value)}
               className="w-full px-3 py-2 text-xs rounded-sm outline-none" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
