@@ -125,8 +125,6 @@ export const api = {
 
   getLogs: (limit = 100) => authReq<string[]>('GET', `/api/logs?limit=${limit}`),
 
-  getLanguages: () => req<{ name: string; code: string; tag?: string }[]>('GET', '/api/languages'),
-
   getConfig: () => req<{ frontend_url: string; receiver_url?: string }>('GET', '/api/auth/config'),
 };
 
