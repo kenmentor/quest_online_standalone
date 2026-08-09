@@ -1,4 +1,4 @@
-function resolveApiBase(): string {
+export function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const server = new URLSearchParams(window.location.search).get('server');
     if (server) {
@@ -11,8 +11,9 @@ function resolveApiBase(): string {
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 }
 
-const API_BASE = resolveApiBase();
-const WS_BASE = API_BASE.replace(/^http/, 'ws');
+function getWsBase(): string {
+  return getApiBase().replace(/^http/, 'ws');
+}
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
@@ -60,7 +61,7 @@ async function req<T>(method: string, path: string, body?: unknown, auth = false
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
+    const res = await fetch(`${getApiBase()}${path}`, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -134,7 +135,7 @@ export function connectTranscripts(
   onTranscript: (source: string) => void,
   onTranslation: (tag: string, source: string, translated: string) => void,
 ): WebSocket {
-  const ws = new WebSocket(`${WS_BASE}/api/ws/transcripts${wsAuthSuffix()}`);
+  const ws = new WebSocket(`${getWsBase()}/api/ws/transcripts${wsAuthSuffix()}`);
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
@@ -146,7 +147,7 @@ export function connectTranscripts(
 }
 
 export function connectLogs(onLog: (entry: string) => void): WebSocket {
-  const ws = new WebSocket(`${WS_BASE}/api/ws/logs${wsAuthSuffix()}`);
+  const ws = new WebSocket(`${getWsBase()}/api/ws/logs${wsAuthSuffix()}`);
   ws.onmessage = (e) => onLog(e.data);
   return ws;
 }

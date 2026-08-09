@@ -8,7 +8,7 @@ import CenterPanel from "./components/CenterPanel";
 import RightSidebar from "./components/RightSidebar";
 import ConfigPopup from "./components/ConfigPopup";
 import Toast from "./components/Toast";
-import { api, auth as authApi, connectTranscripts, connectLogs } from "../lib/api";
+import { api, auth as authApi, connectTranscripts, connectLogs, getApiBase } from "../lib/api";
 
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
@@ -67,7 +67,7 @@ export default function Home() {
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
     if (!token) {
-      router.replace("/auth");
+      router.replace("/auth" + window.location.search);
       return;
     }
     let cancelled = false;
@@ -81,7 +81,7 @@ export default function Home() {
       if (cancelled) return;
       localStorage.removeItem("auth_token");
       localStorage.removeItem("auth_user");
-      router.replace("/auth");
+      router.replace("/auth" + window.location.search);
     });
     return () => { cancelled = true; };
   }, []);
@@ -170,7 +170,7 @@ export default function Home() {
     localStorage.removeItem("mic_config");
     localStorage.removeItem("selected_tag");
     loggingOutRef.current = false;
-    router.replace("/auth");
+    router.replace("/auth" + window.location.search);
   }, [router]);
 
   const handleEngineAction = useCallback(async () => {
@@ -229,7 +229,7 @@ export default function Home() {
       },
     }).then((stream) => {
       audioStreamRef.current = stream;
-      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, 'ws') || 'wss://0b73-105-116-13-159.ngrok-free.app';
+      const wsUrl = getApiBase().replace(/^http/, 'ws');
       const token = localStorage.getItem('auth_token') || '';
       const ws = new WebSocket(`${wsUrl}/api/ws/audio?token=${encodeURIComponent(token)}`);
       audioWsRef.current = ws;
