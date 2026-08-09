@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: stefie-registry
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/servers
+    envVars:
+      - key: REGISTRY_TOKEN
+        value: change-me
+      - key: FRONTEND_BASE_URL
+        value: ""
+      - key: ALIVE_SECONDS
+        value: "90"

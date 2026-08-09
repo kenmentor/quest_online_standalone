@@ -62,7 +62,9 @@ export interface AddEngineBody {
 }
 
 async function req<T>(method: string, path: string, body?: unknown, auth = false): Promise<T> {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = {
+    'ngrok-skip-browser-warning': 'true',
+  };
   if (body) headers['Content-Type'] = 'application/json';
   if (auth) {
     const token = getToken();
