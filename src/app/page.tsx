@@ -17,6 +17,7 @@ export default function Home() {
   const [phase, setPhase] = useState<"startup" | "console">("startup");
   const [authed, setAuthed] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [hasServer, setHasServer] = useState(false);
   const [isDark, setIsDark] = useState(true);
   const [engineState, setEngineState] = useState("IDLE");
   const [statBadge, setStatBadge] = useState("STATUS: DISCONNECTED");
@@ -71,17 +72,31 @@ export default function Home() {
       return;
     }
     let cancelled = false;
+    if (!getApiBase()) {
+      if (cancelled) return;
+      setHasServer(false);
+      setAuthed(true);
+      setCheckingAuth(false);
+      return;
+    }
+    setHasServer(true);
     authApi.me().then((res) => {
       if (cancelled) return;
       setUserName(res.user.username);
       setUserId(res.user.id);
       setAuthed(true);
       setCheckingAuth(false);
-    }).catch(() => {
+    }).catch((e: unknown) => {
       if (cancelled) return;
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("auth_user");
-      router.replace("/auth" + window.location.search);
+      if ((e as { status?: number })?.status === 401) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("auth_user");
+        router.replace("/auth" + window.location.search);
+        return;
+      }
+      setHasServer(false);
+      setAuthed(true);
+      setCheckingAuth(false);
     });
     return () => { cancelled = true; };
   }, []);
@@ -548,6 +563,35 @@ export default function Home() {
   }, [phase, authed]);
 
   if (checkingAuth) return null;
+
+  if (authed && !hasServer) {
+    return (
+      <div className="h-full flex items-center justify-center p-6" style={{ background: "var(--color-bg-app)" }}>
+        <div className="max-w-md text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6" style={{ background: "var(--color-accent)" }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-black"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+          <h2 className="text-xl font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
+            Connect to your server
+          </h2>
+          <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--color-text-secondary)" }}>
+            Run your Stefie app on any computer, then open the link it shows you
+            (or scan the QR code on the screen). This dashboard will connect to it automatically.
+          </p>
+          <div className="text-xs mb-6 px-4 py-3 rounded-lg break-all" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}>
+            {typeof window !== "undefined" ? `${window.location.origin}/?server=YOUR-LINK` : ""}
+          </div>
+          <button
+            onClick={handleLogout}
+            className="px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            style={{ background: "var(--color-accent)", color: "#000", border: "none", cursor: "pointer" }}
+          >
+            Go to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const currentInst = instances.find(i => i.tag === selectedTag);
 

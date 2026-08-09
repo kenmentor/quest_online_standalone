@@ -8,7 +8,7 @@ export function getApiBase(): string {
     const saved = sessionStorage.getItem('api_base');
     if (saved) return saved;
   }
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  return '';
 }
 
 function getWsBase(): string {
@@ -73,7 +73,9 @@ async function req<T>(method: string, path: string, body?: unknown, auth = false
         const json = await res.json();
         detail = json.detail || '';
       } catch {}
-      throw new Error(detail || `${res.status} ${res.statusText}`);
+      const err = new Error(detail || `${res.status} ${res.statusText}`) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
     }
     return res.json();
   } catch (e: unknown) {
