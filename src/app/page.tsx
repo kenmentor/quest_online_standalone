@@ -44,7 +44,7 @@ export default function Home() {
   const [speed, setSpeed] = useState({ dl: "–", dlBadge: "–", dlType: "–", ul: "–", ulBadge: "–", ulType: "–" });
   const [btnText, setBtnText] = useState("INITIALIZE LISTENING");
   const [frontendUrl, setFrontendUrl] = useState("http://localhost:3001");
-  const [receiverUrl, setReceiverUrl] = useState("");
+  const [receiverUrl, setReceiverUrl] = useState(process.env.NEXT_PUBLIC_RECEIVER_URL || "");
   const [shareLink, setShareLink] = useState("");
   const [userName, setUserName] = useState("");
   const [userId, setUserId] = useState("");
@@ -405,24 +405,35 @@ export default function Home() {
   // Restore engines from server on console load
   useEffect(() => {
     if (phase !== "console" || !authed) return;
+    const LANG_CODE: Record<string, string> = { German: "de", French: "fr", Spanish: "es", Italian: "it", English: "en" };
     api.getEngines().then((engines) => {
-      if (!Array.isArray(engines) || engines.length === 0) return;
-      const restored = engines.map((e: { tag: string; name: string; room_name?: string; running: boolean }) => ({
+      const arr = Array.isArray(engines) ? engines : [];
+      const restored = arr.map((e: { tag: string; name: string; room_name?: string; running: boolean }) => ({
         tag: e.tag,
         name: e.name,
         modelName: "",
         clients: 0,
         roomName: e.room_name || `${e.name.toLowerCase().replace(' ', '-')}-room`,
       }));
-      setInstances(restored);
-      setLangTags(restored.map((i: { tag: string; name: string }) => ({ tag: i.tag, name: i.name })));
       if (restored.length > 0) {
+        setInstances(restored);
+        setLangTags(restored.map((i: { tag: string; name: string }) => ({ tag: i.tag, name: i.name })));
         const savedTag = localStorage.getItem("selected_tag");
         const restoreTag = savedTag && restored.some((i: { tag: string }) => i.tag === savedTag) ? savedTag : restored[0].tag;
         setSelectedTag(restoreTag);
         setCurrentViewTag(restoreTag);
+        addLog(`[INFO] Restored ${restored.length} engine(s) from server.`);
       }
-      addLog(`[INFO] Restored ${restored.length} engine(s) from server.`);
+      Promise.all([api.getModels(), api.getLanguages()]).then(([models, langs]) => {
+        const have = new Set(arr.map((e) => e.tag));
+        langs.forEach((lang) => {
+          const tag = lang.tag || LANG_CODE[lang.name] || "";
+          if (!tag || have.has(tag)) return;
+          const model = models.find((m: { language: string }) => m.language === lang.name);
+          if (!model) return;
+          addInstance(tag, lang.name, model.name, model.path, model.json_path, model.level);
+        });
+      }).catch(() => {});
     }).catch(() => {});
     api.getLogs(200).then((entries) => {
       if (entries.length > 0) setLogs(entries);
@@ -440,7 +451,7 @@ export default function Home() {
       if (cfg.frontend_url) setFrontendUrl(cfg.frontend_url);
       if (cfg.receiver_url) setReceiverUrl(cfg.receiver_url);
     }).catch(() => {});
-  }, [phase, authed, addLog]);
+  }, [phase, authed, addLog, addInstance]);
 
   const toggleTheme = useCallback(() => {
     setIsDark(p => { const n = !p; document.documentElement.classList.toggle("dark", n); document.documentElement.classList.toggle("light", !n); localStorage.setItem("theme", n ? "dark" : "light"); return n; });
