@@ -166,6 +166,7 @@ export default function Home() {
     try { await authApi.logout(); } catch {}
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
+    sessionStorage.removeItem("api_base");
     localStorage.removeItem("api_base");
     localStorage.removeItem("mic_config");
     localStorage.removeItem("selected_tag");

@@ -2,10 +2,10 @@ export function getApiBase(): string {
   if (typeof window !== 'undefined') {
     const server = new URLSearchParams(window.location.search).get('server');
     if (server) {
-      localStorage.setItem('api_base', server);
+      sessionStorage.setItem('api_base', server);
       return server;
     }
-    const saved = localStorage.getItem('api_base');
+    const saved = sessionStorage.getItem('api_base');
     if (saved) return saved;
   }
   return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
