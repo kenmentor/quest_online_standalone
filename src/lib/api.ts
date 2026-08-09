@@ -1,6 +1,16 @@
+function resolveServerParam(value: string | null): string | null {
+  if (!value) return null;
+  const v = value.trim();
+  if (!v) return null;
+  if (v.startsWith('http')) return v;
+  if (v.includes('.') || v.includes('/')) return null;
+  return `https://${v}.ngrok-free.app`;
+}
+
 export function getApiBase(): string {
   if (typeof window !== 'undefined') {
-    const server = new URLSearchParams(window.location.search).get('server');
+    const q = new URLSearchParams(window.location.search);
+    const server = resolveServerParam(q.get('server')) ?? resolveServerParam(q.get('s'));
     if (server) {
       sessionStorage.setItem('api_base', server);
       return server;
