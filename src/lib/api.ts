@@ -1,4 +1,17 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://0b73-105-116-13-159.ngrok-free.app';
+function resolveApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const server = new URLSearchParams(window.location.search).get('server');
+    if (server) {
+      localStorage.setItem('api_base', server);
+      return server;
+    }
+    const saved = localStorage.getItem('api_base');
+    if (saved) return saved;
+  }
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+}
+
+const API_BASE = resolveApiBase();
 const WS_BASE = API_BASE.replace(/^http/, 'ws');
 
 function getToken(): string | null {
