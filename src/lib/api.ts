@@ -38,6 +38,11 @@ export interface TtsModel {
   json_path: string;
 }
 
+export interface LanguageInfo {
+  name: string;
+  code: string;
+}
+
 export interface EngineInfo {
   tag: string;
   name: string;
@@ -106,6 +111,8 @@ function authReq<T>(method: string, path: string, body?: unknown): Promise<T> {
 
 export const api = {
   getModels: () => req<TtsModel[]>('GET', '/api/models'),
+
+  getLanguages: () => req<LanguageInfo[]>('GET', '/api/languages'),
 
   getEngines: () => authReq<EngineInfo[]>('GET', '/api/engines'),
 

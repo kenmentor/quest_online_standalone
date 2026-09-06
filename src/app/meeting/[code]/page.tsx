@@ -41,17 +41,29 @@ const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "ko", name: "Korean", flag: "🇰🇷" },
 ];
 
-const ROOM_LIST = [
-  { code: "english-room", name: "English", flag: "🇬🇧" },
-  { code: "french-room", name: "French", flag: "🇫🇷" },
-  { code: "german-room", name: "German", flag: "🇩🇪" },
-];
-
-const ROOM_NAMES: Record<string, string> = {
-  "english-room": "English",
-  "french-room": "French",
-  "german-room": "German",
+// Base rooms are derived from the language list plus translation languages.
+// Each participant's room code is `<base>-room` optionally suffixed with a
+// user prefix (`<base>-room-<prefix>`), matching what the server creates.
+const BASE_ROOM_LANG: Record<string, { name: string; flag: string }> = {
+  english: { name: "English", flag: "🇬🇧" },
+  french: { name: "French", flag: "🇫🇷" },
+  german: { name: "German", flag: "🇩🇪" },
+  spanish: { name: "Spanish", flag: "🇪🇸" },
+  italian: { name: "Italian", flag: "🇮🇹" },
 };
+
+/** Map an arbitrary room code (incl. suffixed) to a base room code + label */
+function parseRoomCode(
+  roomCode: string,
+): { base: string; label: string; flag: string } {
+  for (const base of Object.keys(BASE_ROOM_LANG)) {
+    const id = `${base}-room`;
+    if (roomCode === id || roomCode.startsWith(`${id}-`)) {
+      return { base: id, label: BASE_ROOM_LANG[base].name, flag: BASE_ROOM_LANG[base].flag };
+    }
+  }
+  return { base: roomCode, label: roomCode, flag: "🔊" };
+}
 
 interface Participant {
   id: string;
@@ -78,10 +90,9 @@ function getTabId(): string {
 
 /** Extract the room prefix (suffix after base room name) from a prefixed room code */
 function getRoomPrefix(roomCode: string): string {
-  for (const base of Object.keys(ROOM_NAMES)) {
-    if (roomCode.startsWith(base) && roomCode.length > base.length) {
-      return roomCode.slice(base.length);
-    }
+  const { base } = parseRoomCode(roomCode);
+  if (roomCode.startsWith(base) && roomCode.length > base.length) {
+    return roomCode.slice(base.length);
   }
   return "";
 }
@@ -177,7 +188,7 @@ function NameEntry({
     return "";
   });
 
-  const roomDisplayName = ROOM_NAMES[roomCode] || ROOM_NAMES[Object.keys(ROOM_NAMES).find((k) => roomCode.startsWith(k)) || ""] || roomCode;
+  const roomDisplayName = parseRoomCode(roomCode).label || roomCode;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -246,7 +257,7 @@ function LanguageSelector({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<"language" | "room">("room");
 
-  const currentRoomData = ROOM_LIST.find((r) => currentRoom.startsWith(r.code));
+  const currentRoomData = parseRoomCode(currentRoom);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -268,9 +279,9 @@ function LanguageSelector({
       >
         <Globe className="w-4 h-4" />
         <span className="text-sm hidden sm:inline">
-          {currentRoomData?.flag} {currentRoomData?.name}
+          {currentRoomData.flag} {currentRoomData.label}
         </span>
-        <span className="text-sm sm:hidden">{currentRoomData?.flag}</span>
+        <span className="text-sm sm:hidden">{currentRoomData.flag}</span>
         <ChevronDown
           className={`w-4 h-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
@@ -301,28 +312,32 @@ function LanguageSelector({
 
             <div className="p-2 max-h-64 overflow-y-auto">
               {activeTab === "room"
-                ? ROOM_LIST.map((room) => (
-                    <button
-                      key={room.code}
-                      onClick={() => {
-                        onRoomChange(room.code);
-                        setIsOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                        currentRoom === room.code
-                          ? "bg-white text-black"
-                          : "text-white hover:bg-[#252525]"
-                      }`}
-                    >
-                      <span className="text-lg sm:text-xl">{room.flag}</span>
-                      <span className="text-sm font-medium">
-                        {room.name} Room
-                      </span>
-                      {currentRoom === room.code && (
-                        <Volume2 className="w-4 h-4 ml-auto" />
-                      )}
-                    </button>
-                  ))
+                ? Object.entries(BASE_ROOM_LANG).map(([name, meta]) => {
+                    const base = `${name}-room`;
+                    const code = `${base}${getRoomPrefix(currentRoom)}`;
+                    return (
+                      <button
+                        key={base}
+                        onClick={() => {
+                          onRoomChange(code);
+                          setIsOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
+                          currentRoom === base
+                            ? "bg-white text-black"
+                            : "text-white hover:bg-[#252525]"
+                        }`}
+                      >
+                        <span className="text-lg sm:text-xl">{meta.flag}</span>
+                        <span className="text-sm font-medium">
+                          {meta.name} Room
+                        </span>
+                        {currentRoom === base && (
+                          <Volume2 className="w-4 h-4 ml-auto" />
+                        )}
+                      </button>
+                    );
+                  })
                 : LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
@@ -580,7 +595,7 @@ export default function MeetingPage() {
   const [transcriptLines, setTranscriptLines] = useState<string[]>([]);
   const [livekitConfig, setLivekitConfig] = useState<{
     serverUrl: string;
-    tokenEndpoint: string;
+    serverBase: string;
   } | null>(null);
   const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [isMicOn, setIsMicOn] = useState(false);
@@ -611,28 +626,54 @@ export default function MeetingPage() {
   // Lifecycle Effects
   // ============================================================
 
-  /** Initialize LiveKit server URL and token endpoint based on current host */
+  /** Initialize server base URL (Stefie FastAPI server) and LiveKit Cloud URL */
   useEffect(() => {
-    const protocol =
-      typeof window !== "undefined" ? window.location.protocol : "http:";
-    const hostname =
-      typeof window !== "undefined" ? window.location.hostname : "localhost";
-    const port = typeof window !== "undefined" ? window.location.port : "3000";
-    const isLocal =
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
+    if (typeof window === "undefined") return;
+    let cancelled = false;
 
-    const serverUrl =
-      process.env.NEXT_PUBLIC_LIVEKIT_URL ||
-      (isLocal ? `ws://${hostname}:7880` : `wss://${hostname}:7880`);
-    const baseUrl = isLocal
-      ? `${protocol}//${hostname}:${port}`
-      : `${protocol}//${hostname}`;
-    const tokenEndpoint = `${baseUrl}/api/token`;
+    const resolveServer = (): string | null => {
+      const q = new URLSearchParams(window.location.search);
+      for (const key of ["server", "s"]) {
+        const raw = q.get(key);
+        if (!raw) continue;
+        const v = raw.trim();
+        if (!v) continue;
+        if (v.startsWith("http")) return v;
+        if (v.includes(".") || v.includes("/")) return null;
+        return `https://${v}.ngrok-free.app`;
+      }
+      return process.env.NEXT_PUBLIC_STEFIE_API_URL || null;
+    };
 
-    setLivekitConfig({ serverUrl, tokenEndpoint });
-    setIsConfigLoading(false);
+    const base = resolveServer();
+    if (!base) {
+      setLivekitConfig(null);
+      setIsConfigLoading(false);
+      return;
+    }
+
+    // Ensure the server API has an accessible base for WS (metrics only; not required to join)
+    (async () => {
+      try {
+        const res = await fetch(`${base}/api/auth/config`);
+        if (!res.ok) throw new Error("bad status");
+        const cfg = await res.json();
+        if (cancelled) return;
+        setLivekitConfig({
+          serverUrl: (cfg.livekit_url as string) || "",
+          serverBase: base,
+        });
+      } catch {
+        if (cancelled) return;
+        setLivekitConfig({ serverUrl: "", serverBase: base });
+      } finally {
+        if (!cancelled) setIsConfigLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   /** Reset all state when room code changes (room switching) */
@@ -718,8 +759,8 @@ export default function MeetingPage() {
       setConnectionState(ConnectionState.Connecting);
       setError(null);
 
-      if (!livekitConfig) {
-        setError("Configuration loading...");
+      if (!livekitConfig || !livekitConfig.serverUrl) {
+        setError("Cannot connect: server did not provide a LiveKit URL.");
         setConnectionState(ConnectionState.Disconnected);
         return;
       }
@@ -737,19 +778,15 @@ export default function MeetingPage() {
           startAudioKeepalive(audioContextRef.current, keepaliveOscRef, keepaliveGainRef);
         }
 
-        // Fetch participant token from API
-        const response = await fetch(livekitConfig.tokenEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            identity: `${name}_${tabId}`,
+        // Fetch participant token from the Stefie FastAPI server
+        const response = await fetch(
+          `${livekitConfig.serverBase.replace(/\/+$/, "")}/api/token?${new URLSearchParams({
             room: roomCode,
-            name,
-          }),
-        });
+            identity: `${name}_${tabId}`,
+          })}`,
+        );
         if (!response.ok) throw new Error("Failed to get token");
-
-        const { participantToken: token } = await response.json();
+        const { token } = await response.json();
 
         // Create and configure LiveKit room
         const { Room } = await import("livekit-client");
@@ -980,10 +1017,10 @@ export default function MeetingPage() {
         roomRef.current = null;
       }
       isReconnectingRef.current = false;
-      const prefix = getRoomPrefix(roomCode);
-      router.push(`/meeting/${newRoom}${prefix}`);
+      const q = typeof window !== "undefined" ? window.location.search : "";
+      router.push(`/meeting/${newRoom}${q}`);
     },
-    [router, roomCode],
+    [router],
   );
 
   /** Toggle microphone on/off */
@@ -1024,7 +1061,7 @@ export default function MeetingPage() {
     connectionState === ConnectionState.Connecting ||
     connectionState === ConnectionState.Reconnecting;
   const isReconnecting = connectionState === ConnectionState.Reconnecting;
-  const roomDisplayName = ROOM_NAMES[roomCode] || ROOM_NAMES[Object.keys(ROOM_NAMES).find((k) => roomCode.startsWith(k)) || ""] || roomCode;
+  const roomDisplayName = parseRoomCode(roomCode).label || roomCode;
 
   // ============================================================
   // Render

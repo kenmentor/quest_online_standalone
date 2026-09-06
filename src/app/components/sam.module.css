@@ -1,0 +1,359 @@
+/* Exact port of sam-v3's web/src/App.module.css + index.css design tokens */
+
+.root {
+  --bg: #030303;
+  --surface: #0a0a0a;
+  --surface-2: #111111;
+  --border: #1a1a1a;
+  --border-2: #2a2a2a;
+  --accent: #00ff88;
+  --accent-dim: rgba(0, 255, 136, 0.12);
+  --red: #ef4444;
+  --blue: #3b82f6;
+  --text: #e8e8e8;
+  --text-2: #888888;
+  --text-3: #444444;
+  --font-mono: var(--font-jbm), ui-monospace, Consolas, monospace;
+  --font-sans: var(--font-syne), "SF Pro Display", system-ui, sans-serif;
+
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-family: var(--font-sans);
+  font-size: 20px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 3px;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  padding: 5px 12px;
+  border-radius: 2px;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.badgeActive {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.badgeError {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.badgeActive .badgeDot {
+  box-shadow: 0 0 6px var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  gap: 24px;
+}
+
+.card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.visualizer {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 36px;
+}
+
+.bar {
+  flex: 1;
+  background: var(--text-3);
+  border-radius: 1px;
+  height: 2px;
+  transition:
+    height 0.08s ease,
+    background 0.3s;
+  min-width: 3px;
+}
+
+.barActive {
+  background: var(--accent);
+}
+
+.statusText {
+  font-size: 11px;
+  color: var(--text-2);
+  letter-spacing: 0.04em;
+  min-height: 16px;
+  word-break: break-word;
+}
+
+.statusError {
+  color: var(--red);
+}
+
+.langRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+
+.langTag {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--text-2);
+}
+
+.participants {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.sectionLabel {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-3);
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  padding: 4px 10px;
+  border-radius: 2px;
+}
+
+.pillDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 5px var(--accent);
+}
+
+.actions {
+  padding-top: 4px;
+}
+
+.actionsRow {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  width: 100%;
+  padding: 14px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  border-radius: 2px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btnPrimary {
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: #cccccc;
+  border-color: #cccccc;
+}
+
+.btnPrimary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btnLoading {
+  background: var(--blue) !important;
+  border-color: var(--blue) !important;
+  color: #fff !important;
+}
+
+.btnDanger {
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.btnDanger:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+.btnGhost {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 8px 16px;
+  cursor: pointer;
+  text-align: center;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+.btnGhost:hover {
+  color: var(--text);
+  border-color: var(--border-2);
+}
+
+.logSection {
+  width: 100%;
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.logToggle {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 8px 16px;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+  border-radius: 2px 2px 0 0;
+  text-transform: uppercase;
+}
+
+.logToggle:hover {
+  color: var(--text);
+  border-color: var(--border-2);
+}
+
+.logViewer {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 2px 2px;
+  padding: 12px 16px;
+  height: 220px;
+  overflow-y: auto;
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.logEmpty {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.logLine {
+  padding: 1px 0;
+  border-bottom: 1px solid var(--border);
+  word-break: break-all;
+}
+
+.logLine:last-child {
+  border-bottom: none;
+}
+
+.spinner {
+  margin-right: 8px;
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+}

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { api, TtsModel } from "../../lib/api";
+import { api, LanguageInfo } from "../../lib/api";
 
 const LANG_TAG: Record<string, string> = { German: "de", French: "fr", Spanish: "es", Italian: "it" };
 
@@ -18,15 +18,15 @@ interface ConfigPopupProps {
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
-  const [allModels, setAllModels] = useState<TtsModel[]>([]);
+  const [allLanguages, setAllLanguages] = useState<LanguageInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [spinnerChar, setSpinnerChar] = useState("");
-  const [selectedModelIdx, setSelectedModelIdx] = useState(0);
+  const [selectedLangIdx, setSelectedLangIdx] = useState(0);
 
   useEffect(() => {
-    api.getModels()
-      .then((m) => { setAllModels(m); setSelectedModelIdx(0); setLoading(false); })
+    api.getLanguages()
+      .then((langs) => { setAllLanguages(langs); setSelectedLangIdx(0); setLoading(false); })
       .catch(() => { setLoading(false); });
   }, []);
 
@@ -40,7 +40,7 @@ export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
     return () => clearInterval(interval);
   }, [saving]);
 
-  const selectedModel = allModels[selectedModelIdx];
+  const selectedLang = allLanguages[selectedLangIdx];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -51,28 +51,28 @@ export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
         </div>
 
         <p className="text-xs font-bold" style={{ color: "var(--color-text-label)" }}>
-          Available Translator Models {!loading && allModels.length > 0 && <span style={{ color: "var(--color-text-secondary)" }}>({allModels.length})</span>}
+          Available Translation Languages {!loading && allLanguages.length > 0 && <span style={{ color: "var(--color-text-secondary)" }}>({allLanguages.length})</span>}
         </p>
-        <select value={selectedModelIdx} onChange={e => setSelectedModelIdx(Number(e.target.value))} className="w-full px-2.5 py-2 text-xs rounded-sm outline-none cursor-pointer" style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }} disabled={loading || allModels.length === 0}>
-          {loading && <option>Loading models...</option>}
-          {allModels.map((m, i) => <option key={i} value={i}>{m.language} — {m.name}  [{m.level} quality]</option>)}
+        <select value={selectedLangIdx} onChange={e => setSelectedLangIdx(Number(e.target.value))} className="w-full px-2.5 py-2 text-xs rounded-sm outline-none cursor-pointer" style={{ background: "var(--color-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }} disabled={loading || allLanguages.length === 0}>
+          {loading && <option>Loading languages...</option>}
+          {allLanguages.map((l, i) => <option key={i} value={i}>{l.name}</option>)}
         </select>
 
-        {!loading && allModels.length === 0 && <p className="text-[11px] leading-relaxed" style={{ color: "#f59e0b" }}>⚠ No TTS models found on the server.</p>}
+        {!loading && allLanguages.length === 0 && <p className="text-[11px] leading-relaxed" style={{ color: "#f59e0b" }}>⚠ No languages found on the server.</p>}
 
         <div className="h-2" />
         <button onClick={async () => {
-            if (!selectedModel || saving) return;
+            if (!selectedLang || saving) return;
             setSaving(true);
             try {
-              await onSave(tagFor(selectedModel.language), selectedModel.language, selectedModel.name, selectedModel.path, selectedModel.json_path, selectedModel.level);
+              await onSave(tagFor(selectedLang.name), selectedLang.name, "", "", "", "");
             } finally {
               setSaving(false);
             }
           }}
-          disabled={loading || !selectedModel || saving}
+          disabled={loading || !selectedLang || saving}
           className="w-full py-3 text-xs font-bold tracking-wider uppercase rounded-sm transition-colors"
-          style={{ background: selectedModel ? "var(--color-accent)" : "var(--color-border)", color: selectedModel ? "#000" : "var(--color-text-secondary)", border: `1px solid ${selectedModel ? "var(--color-accent)" : "var(--color-border)"}`, opacity: selectedModel && !saving ? 1 : 0.5, cursor: selectedModel && !saving ? "pointer" : "not-allowed" }}>
+          style={{ background: selectedLang ? "var(--color-accent)" : "var(--color-border)", color: selectedLang ? "#000" : "var(--color-text-secondary)", border: `1px solid ${selectedLang ? "var(--color-accent)" : "var(--color-border)"}`, opacity: selectedLang && !saving ? 1 : 0.5, cursor: selectedLang && !saving ? "pointer" : "not-allowed" }}>
           {saving ? `CONFIGURING  ${spinnerChar}` : "Configure"}
         </button>
       </div>

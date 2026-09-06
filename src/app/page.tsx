@@ -3,14 +3,78 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ConfigWizard from "./components/ConfigWizard";
-import LeftSidebar from "./components/LeftSidebar";
-import CenterPanel from "./components/CenterPanel";
-import RightSidebar from "./components/RightSidebar";
 import ConfigPopup from "./components/ConfigPopup";
 import Toast from "./components/Toast";
 import { api, auth as authApi, connectTranscripts, connectLogs, getApiBase } from "../lib/api";
+import styles from "./components/sam.module.css";
 
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function Spinner() {
+  const frames = SPINNER_CHARS;
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setI((v) => (v + 1) % frames.length), 100);
+    return () => clearInterval(id);
+  }, [frames]);
+  return <span className={styles.spinner}>{frames[i]}</span>;
+}
+
+function Visualizer({ active }: { active: boolean }) {
+  const BARS = 20;
+  const [heights, setHeights] = useState<number[]>(Array(BARS).fill(2));
+
+  useEffect(() => {
+    if (!active) {
+      setHeights(Array(BARS).fill(2));
+      return;
+    }
+    const id = setInterval(() => {
+      setHeights(
+        Array(BARS)
+          .fill(0)
+          .map(() => Math.random() * 26 + 3),
+      );
+    }, 80);
+    return () => clearInterval(id);
+  }, [active]);
+
+  return (
+    <div className={styles.visualizer}>
+      {heights.map((h, i) => (
+        <div
+          key={i}
+          className={`${styles.bar} ${active ? styles.barActive : ""}`}
+          style={{ height: h + "px" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function LogViewer({ logs }: { logs: string[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.scrollTop = ref.current.scrollHeight;
+    }
+  }, [logs]);
+
+  return (
+    <div className={styles.logViewer} ref={ref}>
+      {logs.length === 0 ? (
+        <span className={styles.logEmpty}>no livekit logs yet…</span>
+      ) : (
+        logs.map((line, i) => (
+          <div key={i} className={styles.logLine}>
+            {line}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
@@ -18,10 +82,9 @@ export default function Home() {
   const [authed, setAuthed] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [hasServer, setHasServer] = useState(false);
-  const [isDark, setIsDark] = useState(true);
   const [engineState, setEngineState] = useState("IDLE");
-  const [statBadge, setStatBadge] = useState("STATUS: DISCONNECTED");
-  const [statBadgeType, setStatBadgeType] = useState<"neutral" | "active">("neutral");
+  const [statusMsg, setStatusMsg] = useState("idle — press connect");
+  const [statusIsError, setStatusIsError] = useState(false);
   const [micConfig, setMicConfig] = useState<{ deviceId: string; deviceName: string; threshold: number } | null>(() => {
     if (typeof window === "undefined") return null;
     const saved = localStorage.getItem("mic_config");
@@ -29,29 +92,13 @@ export default function Home() {
     return null;
   });
   const [instances, setInstances] = useState<{ tag: string; name: string; modelName: string; clients: number; roomName?: string }[]>([]);
-  const [selectedTag, setSelectedTag] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    return localStorage.getItem("selected_tag") || null;
-  });
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showConfigPopup, setShowConfigPopup] = useState(false);
   const [addBtnEnabled, setAddBtnEnabled] = useState(true);
-  const [transcripts, setTranscripts] = useState<{ source: string; translations: { [k: string]: string } }[]>([]);
-  const [currentViewTag, setCurrentViewTag] = useState<string | null>(null);
-  const [langTags, setLangTags] = useState<{ tag: string; name: string }[]>([]);
-  const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
-  const [spinnerChar, setSpinnerChar] = useState("");
-  const [speed, setSpeed] = useState({ dl: "–", dlBadge: "–", dlType: "–", ul: "–", ulBadge: "–", ulType: "–" });
-  const [btnText, setBtnText] = useState("INITIALIZE LISTENING");
-  const [frontendUrl, setFrontendUrl] = useState("http://localhost:3001");
-  const [receiverUrl, setReceiverUrl] = useState(process.env.NEXT_PUBLIC_RECEIVER_URL || "");
+  const [showLogs, setShowLogs] = useState(false);
   const [shareLink, setShareLink] = useState("");
-  const [userName, setUserName] = useState("");
-  const [userId, setUserId] = useState("");
-  const [totalClients, setTotalClients] = useState(0);
-  const [showUrlDebug, setShowUrlDebug] = useState(false);
-  const [debugUrlInput, setDebugUrlInput] = useState("");
-  const [removingTag, setRemovingTag] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
 
   const toastIdRef = useRef(0);
   const wsTranscriptsRef = useRef<WebSocket | null>(null);
@@ -83,8 +130,6 @@ export default function Home() {
     setHasServer(true);
     authApi.me().then((res) => {
       if (cancelled) return;
-      setUserName(res.user.username);
-      setUserId(res.user.id);
       setAuthed(true);
       setCheckingAuth(false);
     }).catch((e: unknown) => {
@@ -136,27 +181,6 @@ export default function Home() {
     };
   }, []);
 
-  // Spinner during INIT
-  useEffect(() => {
-    if (engineState !== "INIT") return;
-    let i = 0;
-    const interval = setInterval(() => {
-      i = (i + 1) % SPINNER_CHARS.length;
-      setSpinnerChar(SPINNER_CHARS[i]);
-    }, 100);
-    return () => clearInterval(interval);
-  }, [engineState]);
-
-  // Button text based on state
-  useEffect(() => {
-    switch (engineState) {
-      case "INIT": setBtnText(`INITIALIZING  ${spinnerChar}`); break;
-      case "RECORDING": setBtnText("■  STOP RECORDING"); break;
-      case "PAUSED": setBtnText("▶  RESUME"); break;
-      default: setBtnText("▶  START LISTENING");
-    }
-  }, [engineState, spinnerChar]);
-
   const handleLogout = useCallback(async () => {
     if (loggingOutRef.current) return;
     loggingOutRef.current = true;
@@ -168,17 +192,11 @@ export default function Home() {
     setAuthed(false);
     setPhase("startup");
     setInstances([]);
-    setTranscripts([]);
     setLogs([]);
-    setLangTags([]);
     setSelectedTag(null);
-    setCurrentViewTag(null);
-    setUserName("");
-    setUserId("");
-    setTotalClients(0);
     setEngineState("IDLE");
-    setStatBadge("STATUS: DISCONNECTED");
-    setStatBadgeType("neutral");
+    setStatusMsg("idle — press connect");
+    setStatusIsError(false);
     try { await authApi.logout(); } catch {}
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
@@ -190,23 +208,29 @@ export default function Home() {
     router.replace("/auth" + window.location.search);
   }, [router]);
 
+  const selectedInstance = instances.find(i => i.tag === selectedTag) || instances[0];
+  const langLabel = selectedInstance ? selectedInstance.name.toUpperCase() : "";
+
   const handleEngineAction = useCallback(async () => {
     if (engineState === "IDLE") {
       if (instances.length === 0) { showToast("ERROR: Cannot start engine without a target language configured.", "error"); return; }
       setEngineState("INIT");
       setAddBtnEnabled(false);
+      setStatusMsg("starting translation engines…");
+      setStatusIsError(false);
       try {
         const res = await api.startListening();
-        const newState = res.state;
-        setEngineState(newState);
+        setEngineState(res.state);
         setAddBtnEnabled(true);
-        setStatBadge("STATUS: LISTENING");
-        setStatBadgeType("active");
+        setStatusMsg(`connected · room: ${selectedInstance?.roomName ?? ""}`);
+        setStatusIsError(false);
         addLog("[INFO] Server started listening");
         startAudioCapture();
       } catch (e: unknown) {
         setEngineState("IDLE");
         setAddBtnEnabled(true);
+        setStatusMsg(`start failed: ${e instanceof Error ? e.message : e}`);
+        setStatusIsError(true);
         showToast(`ERROR: Failed to start: ${e instanceof Error ? e.message : e}`, "error");
         addLog(`[ERROR] Failed to start listening: ${e instanceof Error ? e.message : e}`);
       }
@@ -216,8 +240,8 @@ export default function Home() {
       try {
         await api.stopListening();
         stopAudioCapture();
-        setStatBadge("STATUS: DISCONNECTED");
-        setStatBadgeType("neutral");
+        setStatusMsg("disconnected");
+        setStatusIsError(false);
         showToast("Recording stopped.", "info");
         addLog("[INFO] Server stopped listening");
       } catch (e: unknown) {
@@ -228,19 +252,22 @@ export default function Home() {
       try {
         await api.resumeListening();
         startAudioCapture();
+        setStatusMsg(`connected · room: ${selectedInstance?.roomName ?? ""}`);
+        setStatusIsError(false);
         addLog("[INFO] Server resumed listening");
       } catch (e: unknown) {
         showToast(`ERROR: Failed to resume: ${e instanceof Error ? e.message : e}`, "error");
       }
     }
-  }, [engineState, instances.length, showToast, addLog]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engineState, instances.length, selectedInstance?.roomName, showToast, addLog]);
 
   function startAudioCapture() {
     if (!micConfig) return;
     navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: micConfig.deviceId ? { exact: micConfig.deviceId } : undefined,
-        sampleRate: 16000,
+        sampleRate: 24000,
         channelCount: 1,
         echoCancellation: true,
       },
@@ -255,7 +282,7 @@ export default function Home() {
       ws.onopen = () => { ready = true; addLog("[INFO] Audio WebSocket connected."); };
       ws.onerror = () => addLog("[ERROR] Audio WebSocket error.");
 
-      const ctx = new AudioContext({ sampleRate: 16000 });
+      const ctx = new AudioContext({ sampleRate: 24000 });
       audioContextRef.current = ctx;
       ctx.resume().then(() => {
         const source = ctx.createMediaStreamSource(stream);
@@ -306,15 +333,14 @@ export default function Home() {
     setMicConfig(c);
     setPhase("console");
     addLog(`[INFO] Mic selected: ${c.deviceName}`);
-    addLog(`[INFO] Emit threshold: ${c.threshold} words`);
     showToast("Application initialized.", "info");
   }, [showToast, addLog]);
 
-  const addInstance = useCallback(async (tag: string, name: string, modelName: string, modelPath: string, modelJsonPath: string, modelLevel: string) => {
+  const addInstance = useCallback(async (tag: string, name: string) => {
     let nextInstances: typeof instances = [];
     setInstances(prev => {
       if (prev.some(i => i.tag === tag)) return prev;
-      const newInst = { tag, name, modelName, clients: 0, roomName: `${name.toLowerCase().replace(' ', '-')}-room` };
+      const newInst = { tag, name, modelName: "", clients: 0, roomName: `${name.toLowerCase().replace(' ', '-')}-room` };
       nextInstances = [...prev, newInst];
       return nextInstances;
     });
@@ -323,84 +349,41 @@ export default function Home() {
       await api.addEngine({
         language_tag: tag,
         language_name: name,
-        model_name: modelName,
-        model_path: modelPath,
-        model_json_path: modelJsonPath,
-        model_level: modelLevel,
+        model_name: "",
+        model_path: "",
+        model_json_path: "",
+        model_level: "",
       });
-      setLangTags(p => [...p, { tag, name }]);
       showToast(`Added engine: ${name} (${tag})`, "info");
       addLog(`[INFO] Added engine: ${name} (${tag})`);
-      if (nextInstances.length === 1) { setSelectedTag(tag); setCurrentViewTag(tag); }
+      if (!selectedTag) { setSelectedTag(tag); }
     } catch (e: unknown) {
       showToast(`ERROR: Failed to add engine: ${e instanceof Error ? e.message : e}`, "error");
       setInstances(prev => prev.filter(i => i.tag !== tag));
-      setLangTags(p => p.filter(i => i.tag !== tag));
     }
     setShowConfigPopup(false);
-  }, [showToast, addLog]);
-
-  const removeInstance = useCallback(async (tag: string) => {
-    if (removingTag) return;
-    setRemovingTag(tag);
-    const inst = instances.find(i => i.tag === tag);
-    try {
-      await api.removeEngine(tag);
-      let remaining: typeof instances = [];
-      setInstances(prev => {
-        remaining = prev.filter(i => i.tag !== tag);
-        return remaining;
-      });
-      setLangTags(p => p.filter(i => i.tag !== tag));
-      if (selectedTag === tag) {
-        setSelectedTag(remaining.length > 0 ? remaining[0].tag : null);
-        setCurrentViewTag(remaining.length > 0 ? remaining[0].tag : null);
-      }
-      showToast(`Removed engine: ${inst?.name ?? tag}`, "info");
-      addLog(`[INFO] Removed engine: ${inst?.name ?? tag}`);
-      if (remaining.length === 0 && (engineStateRef.current === "RECORDING" || engineStateRef.current === "PAUSED")) {
-        addLog("[INFO] No instances left — auto-stopping recording.");
-        await api.stopListening();
-        stopAudioCapture();
-        setEngineState("IDLE");
-        setAddBtnEnabled(true);
-        setStatBadge("STATUS: DISCONNECTED");
-        setStatBadgeType("neutral");
-        showToast("Auto-stopped: all instances removed.", "info");
-      }
-    } catch (e: unknown) {
-      showToast(`ERROR: Failed to remove engine: ${e instanceof Error ? e.message : e}`, "error");
-    } finally {
-      setRemovingTag(null);
-    }
-  }, [selectedTag, showToast, addLog, removingTag]);
-
-  const selectInstance = useCallback((tag: string) => {
-    setSelectedTag(tag);
-    localStorage.setItem("selected_tag", tag);
-    const inst = instances.find(i => i.tag === tag);
-    if (inst) addLog(`[INFO] Selected instance: ${inst.name}`);
-  }, [instances, addLog]);
-
-  // Generate share link when instance changes
-  // Uses userId as room prefix so the listener app joins this user's isolated room
-  useEffect(() => {
-    if (!selectedTag || !userId) { setShareLink(""); return; }
-    const inst = instances.find(i => i.tag === selectedTag);
-    if (!inst) { setShareLink(""); return; }
-    const roomPrefix = userId.slice(0, 8);
-    const base = (receiverUrl || frontendUrl).replace(/\/+$/, "");
-    setShareLink(`${base}/?id=${roomPrefix}`);
-  }, [selectedTag, instances, frontendUrl, receiverUrl, userId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTag, showToast, addLog]);
 
   const copyShareLink = useCallback(() => {
     if (!shareLink) return;
     navigator.clipboard.writeText(shareLink).then(() => {
       showToast("Share link copied to clipboard!", "info");
+      addLog("[INFO] Share link copied.");
     }).catch(() => {
       showToast("ERROR: Failed to copy link", "error");
     });
-  }, [shareLink, showToast]);
+  }, [shareLink, showToast, addLog]);
+
+  // Generate share link for listeners (deep-link into this app's meeting page)
+  useEffect(() => {
+    if (!selectedInstance) { setShareLink(""); return; }
+    const roomName = selectedInstance.roomName || `${selectedInstance.name.toLowerCase().replace(' ', '-')}-room`;
+    const base = (typeof window !== "undefined" ? window.location.origin : "http://localhost:3001").replace(/\/+$/, "");
+    const server = getApiBase();
+    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
+    setShareLink(`${base}/meeting/${roomName}${qs}`);
+  }, [selectedInstance]);
 
   // Restore engines from server on console load
   useEffect(() => {
@@ -415,13 +398,7 @@ export default function Home() {
         roomName: e.room_name || `${e.name.toLowerCase().replace(' ', '-')}-room`,
       }));
       setInstances(restored);
-      setLangTags(restored.map((i: { tag: string; name: string }) => ({ tag: i.tag, name: i.name })));
-      if (restored.length > 0) {
-        const savedTag = localStorage.getItem("selected_tag");
-        const restoreTag = savedTag && restored.some((i: { tag: string }) => i.tag === savedTag) ? savedTag : restored[0].tag;
-        setSelectedTag(restoreTag);
-        setCurrentViewTag(restoreTag);
-      }
+      if (!selectedTag) setSelectedTag(restored[0].tag);
       addLog(`[INFO] Restored ${restored.length} engine(s) from server.`);
     }).catch(() => {});
     api.getLogs(200).then((entries) => {
@@ -430,75 +407,32 @@ export default function Home() {
     api.getStatus().then((status) => {
       if (status.state === "RECORDING") {
         setEngineState("RECORDING");
-        setStatBadge("STATUS: LISTENING");
-        setStatBadgeType("active");
+        setStatusMsg("connected · live translation");
+        setStatusIsError(false);
       } else if (status.state === "PAUSED") {
         setEngineState("PAUSED");
       }
     }).catch(() => {});
-    api.getConfig().then((cfg) => {
-      if (cfg.frontend_url) setFrontendUrl(cfg.frontend_url);
-      if (cfg.receiver_url) setReceiverUrl(cfg.receiver_url);
-    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, authed, addLog]);
 
-  const toggleTheme = useCallback(() => {
-    setIsDark(p => { const n = !p; document.documentElement.classList.toggle("dark", n); document.documentElement.classList.toggle("light", !n); localStorage.setItem("theme", n ? "dark" : "light"); return n; });
-  }, []);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("theme");
-    const dark = saved ? saved === "dark" : true;
-    setIsDark(dark);
-    document.documentElement.classList.add(dark ? "dark" : "light");
-    document.documentElement.classList.toggle("light", !dark);
-  }, []);
-
-  // Ctrl+8 debug shortcut to override frontend URL
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === "8") {
-        e.preventDefault();
-        setDebugUrlInput(receiverUrl || frontendUrl);
-        setShowUrlDebug(p => !p);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [frontendUrl, receiverUrl]);
-
-  const applyDebugUrl = useCallback(() => {
-    let url = debugUrlInput.trim();
-    if (!url) return;
-    if (!url.startsWith("http")) url = `http://${url}`;
-    setReceiverUrl(url);
-    setShowUrlDebug(false);
-    showToast(`Share link URL set to: ${url}`, "info");
-    addLog(`[DEBUG] Share link URL overidden to: ${url}`);
-  }, [debugUrlInput, showToast, addLog]);
-
-  // Transcripts WebSocket (with reconnect on unexpected close)
+  // Transcripts WebSocket — feeds source + translated text into the log viewer
   useEffect(() => {
     if (phase !== "console" || !authed) return;
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     function connect() {
       if (cancelled) return;
-      wsTranscriptsRef.current = connectTranscripts(
+      const ws = connectTranscripts(
         (source) => {
-          setTranscripts(prev => {
-            if (prev.some(e => e.source === source)) return prev;
-            const next = [...prev, { source, translations: {} }];
-            return next.length > 200 ? next.slice(-200) : next;
-          });
+          if (!cancelled) addLog(`[SRC] ${source}`);
         },
         (tag, source, translated) => {
-          setTranscripts(prev => prev.map(e =>
-            e.source === source ? { ...e, translations: { ...e.translations, [tag]: translated } } : e
-          ));
+          if (!cancelled) addLog(`[→ ${tag}] ${translated}`);
         },
       );
-      wsTranscriptsRef.current.onclose = (e) => {
+      wsTranscriptsRef.current = ws;
+      ws.onclose = (e) => {
         if (!cancelled && e.code !== 1000) {
           reconnectTimer = setTimeout(connect, 2000);
         }
@@ -510,7 +444,7 @@ export default function Home() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       wsTranscriptsRef.current?.close();
     };
-  }, [phase, authed]);
+  }, [phase, authed, addLog]);
 
   // Logs WebSocket (with reconnect on unexpected close)
   useEffect(() => {
@@ -520,10 +454,7 @@ export default function Home() {
     function connect() {
       if (cancelled) return;
       wsLogsRef.current = connectLogs((entry) => {
-        setLogs(prev => {
-          const next = [...prev, entry];
-          return next.length > 500 ? next.slice(-500) : next;
-        });
+        if (!cancelled) addLog(entry);
       });
       wsLogsRef.current.onclose = (e) => {
         if (!cancelled && e.code !== 1000) {
@@ -537,9 +468,9 @@ export default function Home() {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       wsLogsRef.current?.close();
     };
-  }, [phase, authed]);
+  }, [phase, authed, addLog]);
 
-  // Status polling for clients / instance info
+  // Status polling for clients / connection state
   useEffect(() => {
     if (phase !== "console" || !authed) return;
     let cancelled = false;
@@ -548,15 +479,14 @@ export default function Home() {
       try {
         const status = await api.getStatus();
         if (cancelled || document.hidden) return;
-        setTotalClients(status.total_clients ?? 0);
         setInstances(prev => prev.map(inst => {
           const serverInst = status.engines.find((e: { tag: string }) => e.tag === inst.tag);
           return { ...inst, clients: serverInst?.clients ?? 0, roomName: serverInst?.room_name ?? inst.roomName };
         }));
         if (status.state === "RECORDING" && engineStateRef.current !== "RECORDING" && engineStateRef.current !== "INIT" && engineStateRef.current !== "PAUSED") {
           setEngineState("RECORDING");
-          setStatBadge("STATUS: LISTENING");
-          setStatBadgeType("active");
+          setStatusMsg("connected · live translation");
+          setStatusIsError(false);
         }
       } catch {}
     };
@@ -569,97 +499,122 @@ export default function Home() {
 
   if (authed && !hasServer) {
     return (
-      <div className="h-full flex items-center justify-center p-6" style={{ background: "var(--color-bg-app)" }}>
-        <div className="max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl mb-6" style={{ background: "var(--color-accent)" }}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-black"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>
+      <div className={styles.root}>
+        <div className={styles.main}>
+          <div className={styles.card} style={{ textAlign: "center" }}>
+            <p className={styles.statusText}>No Stefie server reachable. Open the app with your server link (?server=your-ngrok-link).</p>
+            <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleLogout}>GO TO SIGN IN</button>
           </div>
-          <h2 className="text-xl font-semibold mb-2" style={{ color: "var(--color-text-primary)" }}>
-            Connect to your server
-          </h2>
-          <p className="text-sm leading-relaxed mb-6" style={{ color: "var(--color-text-secondary)" }}>
-            Run your Stefie app on any computer, then open the link it shows you
-            (or scan the QR code on the screen). This dashboard will connect to it automatically.
-          </p>
-          <div className="text-xs mb-6 px-4 py-3 rounded-lg break-all" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-muted)" }}>
-            {typeof window !== "undefined" ? `${window.location.origin}/?server=YOUR-LINK` : ""}
-          </div>
-          <button
-            onClick={handleLogout}
-            className="px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
-            style={{ background: "var(--color-accent)", color: "#000", border: "none", cursor: "pointer" }}
-          >
-            Go to sign in
-          </button>
         </div>
       </div>
     );
   }
 
-  const currentInst = instances.find(i => i.tag === selectedTag);
-
   if (phase === "startup" && authed) return <ConfigWizard onLaunch={handleLaunch} />;
 
+  const isConnected = engineState === "RECORDING" || engineState === "PAUSED";
+  const isConnecting = engineState === "INIT";
+  const isError = statusIsError;
+  const badgeText = isConnected
+    ? `LIVE · ${langLabel || "LIVE"}`
+    : isConnecting
+      ? "CONNECTING"
+      : isError
+        ? "ERROR"
+        : "OFFLINE";
+  const totalClients = instances.reduce((n, i) => n + i.clients, 0);
+  const activeClients = totalClients > 0;
+
   return (
-    <div className="h-full flex overflow-hidden" style={{ background: "var(--color-bg-app)" }}>
-      <LeftSidebar
-        isDark={isDark}
-        onToggleTheme={toggleTheme}
-        instances={instances}
-        selectedTag={selectedTag}
-        onSelectInstance={selectInstance}
-        onNewInstance={() => setShowConfigPopup(true)}
-        onRemoveInstance={removeInstance}
-        logs={logs}
-        addBtnEnabled={addBtnEnabled}
-        engineState={engineState}
-        userName={userName}
-        onLogout={handleLogout}
-        shareLink={shareLink}
-        onCopyShareLink={copyShareLink}
-        totalClients={totalClients}
-        removingTag={removingTag}
-      />
-      <CenterPanel
-        engineState={engineState}
-        statBadge={statBadge}
-        statBadgeType={statBadgeType}
-        onEngineAction={handleEngineAction}
-        langTags={langTags}
-        currentViewTag={currentViewTag}
-        onSwitchView={setCurrentViewTag}
-        transcripts={transcripts}
-        btnText={btnText}
-      />
-      <RightSidebar
-        clients={currentInst?.clients ?? 0}
-        threshold={micConfig?.threshold ?? 10}
-        frontendUrl={frontendUrl}
-        wsUrl={typeof window !== "undefined" ? window.location.hostname : "localhost"}
-        roomName={currentInst?.roomName ?? currentInst?.name ?? ""}
-        downloadSpeed={{ value: speed.dl, badge: speed.dlBadge, badgeType: speed.dlType }}
-        uploadSpeed={{ value: speed.ul, badge: speed.ulBadge, badgeType: speed.ulType }}
-      />
-      {showConfigPopup && <ConfigPopup onClose={() => setShowConfigPopup(false)} onSave={addInstance} />}
-      {showUrlDebug && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowUrlDebug(false)}>
-          <div className="w-[420px] rounded-sm shadow-xl p-4 space-y-3" style={{ background: "var(--color-bg-app)", border: "1px solid var(--color-border)" }} onClick={e => e.stopPropagation()}>
-            <p className="text-[10px] font-extrabold tracking-widest uppercase" style={{ color: "var(--color-text-muted)" }}>DEBUG: Share Link URL Override</p>
-            <p className="text-[11px]" style={{ color: "var(--color-text-secondary)" }}>Enter the listener app URL for share links (Ctrl+8 to toggle)</p>
-            <input value={debugUrlInput} onChange={e => setDebugUrlInput(e.target.value)}
-              className="w-full px-3 py-2 text-xs rounded-sm outline-none" style={{ background: "var(--color-bg-surface)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
-              placeholder="http://localhost:3001" autoFocus />
-            <div className="flex gap-2">
-              <button onClick={applyDebugUrl} className="flex-1 py-2 text-[11px] font-bold tracking-wider uppercase rounded-sm transition-colors" style={{ background: "var(--color-accent)", color: "#000", border: "none", cursor: "pointer" }}>
-                Apply
-              </button>
-              <button onClick={() => setShowUrlDebug(false)} className="py-2 px-4 text-[11px] font-bold tracking-wider uppercase rounded-sm transition-colors" style={{ background: "transparent", color: "var(--color-text-secondary)", border: "1px solid var(--color-border)", cursor: "pointer" }}>
-                Cancel
-              </button>
+    <div className={styles.root}>
+      <header className={styles.header}>
+        <div className={styles.logo}>STEFIE</div>
+        <div className={`${styles.badge} ${isConnected ? styles.badgeActive : isError ? styles.badgeError : ""}`}>
+          <span className={styles.badgeDot} />
+          {badgeText}
+        </div>
+      </header>
+
+      <main className={styles.main}>
+        <div className={styles.card}>
+          <Visualizer active={isConnected} />
+
+          <p className={`${styles.statusText} ${isError ? styles.statusError : ""}`}>
+            {isConnecting && <Spinner />}
+            {statusMsg}
+          </p>
+
+          {instances.length > 0 && (
+            <div className={styles.langRow}>
+              {instances.map(i => (
+                <span key={i.tag} className={styles.langTag}>{i.tag}</span>
+              ))}
             </div>
+          )}
+
+          {activeClients && (
+            <div className={styles.participants}>
+              <span className={styles.sectionLabel}>PARTICIPANTS</span>
+              <div className={styles.pillRow}>
+                {instances.filter(i => i.clients > 0).map(i => (
+                  <span key={i.tag} className={styles.pill}>
+                    <span className={styles.pillDot} />
+                    {i.name} · {i.clients}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className={styles.actionsRow}>
+            <button
+              className={styles.btnGhost}
+              disabled={engineState === "RECORDING" || engineState === "PAUSED"}
+              onClick={() => setShowConfigPopup(true)}
+            >
+              + Add Language
+            </button>
+            <button className={styles.btnGhost} onClick={copyShareLink}>
+              Share
+            </button>
+            <button className={styles.btnGhost} onClick={handleLogout}>
+              Exit
+            </button>
+          </div>
+
+          <div className={styles.actions}>
+            {!isConnected ? (
+              <button
+                className={`${styles.btn} ${styles.btnPrimary} ${isConnecting ? styles.btnLoading : ""}`}
+                onClick={handleEngineAction}
+                disabled={isConnecting}
+              >
+                {isConnecting ? (
+                  <>
+                    <Spinner />
+                    CONNECTING…
+                  </>
+                ) : (
+                  "CONNECT"
+                )}
+              </button>
+            ) : (
+              <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleEngineAction}>
+                {engineState === "RECORDING" ? "DISCONNECT" : "RESUME"}
+              </button>
+            )}
           </div>
         </div>
-      )}
+
+        <div className={styles.logSection}>
+          <button className={styles.logToggle} onClick={() => setShowLogs(v => !v)}>
+            {showLogs ? "▲" : "▼"} LIVEKIT SERVER LOGS
+          </button>
+          {showLogs && <LogViewer logs={logs} />}
+        </div>
+      </main>
+
+      {showConfigPopup && <ConfigPopup onClose={() => setShowConfigPopup(false)} onSave={addInstance} />}
       {toasts.map(t => <Toast key={t.id} message={t.message} level={t.level} onClose={() => removeToast(t.id)} />)}
     </div>
   );
