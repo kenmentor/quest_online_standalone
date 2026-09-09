@@ -619,7 +619,11 @@ export default function MeetingPage() {
     };
 
     const base = resolveServer();
-    if (!base) {
+
+    // With a LiveKit URL from env this app is fully self-sufficient —
+    // no need to call the Stefie server at all.
+    if (ENV_LIVEKIT_URL || !base) {
+      if (cancelled) return;
       setLivekitConfig(null);
       setIsConfigLoading(false);
       return;
@@ -628,7 +632,9 @@ export default function MeetingPage() {
     // Best-effort; joining still works if this fails.
     (async () => {
       try {
-        const res = await fetch(`${base}/api/auth/config`);
+        const res = await fetch(`${base}/api/auth/config`, {
+          headers: { "ngrok-skip-browser-warning": "true" },
+        });
         if (!res.ok) throw new Error("bad status");
         const cfg = await res.json();
         if (cancelled) return;
@@ -769,6 +775,7 @@ export default function MeetingPage() {
               room: roomCode,
               identity: `${name}_${tabId}`,
             })}`,
+            { headers: { "ngrok-skip-browser-warning": "true" } },
           );
           if (!response.ok) throw new Error(t("meeting.failedGetToken"));
           token = (await response.json()).token;
