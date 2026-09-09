@@ -1,18 +1,18 @@
-/* Exact port of sam-v3's web/src/App.module.css + index.css design tokens */
+/* Exact port of the sam-v2-online (sam-v2-livekit-cloud) web/src/App.module.css + index.css design tokens */
 
 .root {
-  --bg: #030303;
-  --surface: #0a0a0a;
-  --surface-2: #111111;
-  --border: #1a1a1a;
-  --border-2: #2a2a2a;
-  --accent: #00ff88;
-  --accent-dim: rgba(0, 255, 136, 0.12);
-  --red: #ef4444;
+  --bg: var(--color-bg-app);
+  --surface: var(--color-bg-surface);
+  --surface-2: var(--color-surface-hover);
+  --border: var(--color-border-light);
+  --border-2: var(--color-border);
+  --accent: var(--color-accent);
+  --accent-dim: rgba(127, 127, 127, 0.12);
+  --red: var(--color-slow);
   --blue: #3b82f6;
-  --text: #e8e8e8;
-  --text-2: #888888;
-  --text-3: #444444;
+  --text: var(--color-text-primary);
+  --text-2: var(--color-text-secondary);
+  --text-3: var(--color-text-muted);
   --font-mono: var(--font-jbm), ui-monospace, Consolas, monospace;
   --font-sans: var(--font-syne), "SF Pro Display", system-ui, sans-serif;
 
@@ -31,6 +31,12 @@
   justify-content: space-between;
   padding: 20px 32px;
   border-bottom: 1px solid var(--border);
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .logo {
@@ -147,24 +153,6 @@
   color: var(--red);
 }
 
-.langRow {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  color: var(--text-3);
-  text-transform: uppercase;
-}
-
-.langTag {
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 2px;
-  color: var(--text-2);
-}
-
 .participants {
   display: flex;
   flex-direction: column;
@@ -208,11 +196,6 @@
 
 .actions {
   padding-top: 4px;
-}
-
-.actionsRow {
-  display: flex;
-  gap: 8px;
 }
 
 .btn {
@@ -268,28 +251,11 @@
   color: #fff;
 }
 
-.btnGhost {
-  flex: 1;
+.btnDisabled {
+  opacity: 0.35;
+  cursor: default;
   background: transparent;
-  border: 1px solid var(--border);
-  color: var(--text-3);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  padding: 8px 16px;
-  cursor: pointer;
-  text-align: center;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
-  border-radius: 2px;
-  text-transform: uppercase;
-}
-
-.btnGhost:hover {
-  color: var(--text);
-  border-color: var(--border-2);
+  border: 1px solid currentColor;
 }
 
 .logSection {
@@ -356,4 +322,569 @@
   display: inline-block;
   width: 12px;
   text-align: center;
+}
+
+.headerAction {
+  flex: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  padding: 6px 10px;
+  cursor: pointer;
+  text-transform: uppercase;
+  border-radius: 2px;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
+}
+
+.headerAction:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--border-2);
+}
+
+.headerAction:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Transcript box inside the status card */
+.transcriptViewer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: #111;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.transcriptLabel {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--text-3);
+}
+
+.transcriptLine {
+  color: #fff;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  font-size: 12px;
+  word-break: break-word;
+}
+
+/* Room section wrapper */
+.roomSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.roomCount {
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+.noRooms {
+  font-size: 13px;
+  opacity: 0.5;
+  text-align: center;
+  padding: 20px 0;
+}
+
+/* Grid of room cards */
+.roomGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+/* Individual room card */
+.roomCard {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.roomCard:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.roomCardActive {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.07);
+}
+
+.roomCardSwitching {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.07);
+}
+
+.roomCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.roomCardName {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.roomCardClients {
+  font-size: 11px;
+  opacity: 0.5;
+  white-space: nowrap;
+}
+
+.roomCardActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Switch warning text inside the card */
+.switchWarning {
+  font-size: 12px;
+  color: #f59e0b;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------------------
+   3-pane STEFIE console — exact port of sam-v2-livekit-cloud app.py MainWindow
+--------------------------------------------------------------------------- */
+
+.panes {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.sidebarLeft,
+.sidebarRight {
+  flex: none;
+  width: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+  background: var(--color-bg-sidebar);
+  overflow-y: auto;
+}
+
+.sidebarLeft {
+  border-right: 1px solid var(--color-border-sidebar);
+}
+
+.sidebarRight {
+  border-left: 1px solid var(--color-border-sidebar);
+}
+
+.paneHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.paneHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.themeBtn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.themeBtn:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.themeIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.sectionTitle {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-top: 10px;
+  user-select: none;
+}
+
+.subLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-label);
+}
+
+.valueText {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.instanceList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.instanceItem {
+  text-align: left;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-light);
+  padding: 12px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  border-radius: 2px;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.instanceItem:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.instanceItemActive {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+}
+
+.addBtn {
+  background: transparent;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.addBtn:hover:not(:disabled) {
+  border-color: var(--color-border);
+  background: var(--color-surface-hover);
+}
+
+.addBtn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.sidebarSpacer {
+  flex: 1;
+}
+
+.centerPane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 32px 40px;
+  overflow-y: auto;
+}
+
+.consoleTitle {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}
+
+.statBadge {
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-status-neutral);
+  white-space: nowrap;
+}
+
+.statBadgeActive {
+  border-color: var(--color-status-active);
+  color: var(--color-status-active);
+}
+
+.hline {
+  height: 1px;
+  background: var(--color-border-sidebar);
+}
+
+.actionBtn {
+  width: 100%;
+  padding: 16px;
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: var(--color-accent);
+  color: var(--color-bg-app);
+  border: 1px solid var(--color-accent);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+}
+
+.actionBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btnInitializing {
+  background: #3b82f6;
+  color: #ffffff;
+  border-color: #3b82f6;
+}
+
+.btnInitializing:hover:not(:disabled) {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.btnRecording {
+  background: transparent;
+  color: var(--color-slow);
+  border-color: var(--color-slow);
+}
+
+.btnRecording:hover:not(:disabled) {
+  background: var(--color-slow);
+  color: #ffffff;
+}
+
+.btnPaused {
+  background: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+.feedHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.langToggles {
+  display: flex;
+  gap: 8px;
+}
+
+.langToggle {
+  flex: none;
+  width: 40px;
+  height: 30px;
+  padding: 0;
+  border-radius: 2px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.langToggle:hover {
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.langToggleActive {
+  background: var(--color-accent);
+  color: var(--color-bg-app);
+  border-color: var(--color-accent);
+}
+
+.transcriptScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding-right: 8px;
+}
+
+.feedEmpty {
+  color: var(--color-text-muted);
+  font-style: italic;
+  font-size: 12px;
+  padding: 20px 0;
+}
+
+.feedItem {
+  display: flex;
+  gap: 24px;
+  padding: 10px 0 20px;
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.feedBlock {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.feedTag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-text-label);
+}
+
+.feedSource {
+  font-size: 14px;
+  font-style: italic;
+  color: var(--color-feed-source);
+  word-break: break-word;
+}
+
+.feedTarget {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-feed-target);
+  word-break: break-word;
+}
+
+.feedTranslating {
+  font-size: 15px;
+  font-style: italic;
+  color: var(--color-text-muted);
+  word-break: break-word;
+}
+
+.infoRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.readonlyInput {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: var(--color-bg-surface);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border-light);
+  border-radius: 2px;
+  outline: none;
+}
+
+.speedRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.speedRow .subLabel {
+  margin-right: auto;
+}
+
+.speedBadge {
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-status-neutral);
+  white-space: nowrap;
+}
+
+.speedSlow {
+  color: var(--color-slow);
+  border-color: var(--color-slow);
+}
+
+.speedMedium {
+  color: var(--color-medium);
+  border-color: var(--color-medium);
+}
+
+.speedFast {
+  color: var(--color-status-active);
+  border-color: var(--color-status-active);
 }

@@ -1,9 +1,5 @@
 "use client";
 
-// ============================================================
-// Imports
-// ============================================================
-
 import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,10 +22,8 @@ import {
   Room,
   DisconnectReason,
 } from "livekit-client";
-
-// ============================================================
-// Constants & Types
-// ============================================================
+import { useI18n } from "../../../lib/i18n";
+import UILangSwitcher from "../../components/UILangSwitcher";
 
 const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "original", name: "Original", flag: "🎙" },
@@ -41,9 +35,7 @@ const LANGUAGES: { code: string; name: string; flag: string }[] = [
   { code: "ko", name: "Korean", flag: "🇰🇷" },
 ];
 
-// Base rooms are derived from the language list plus translation languages.
-// Each participant's room code is `<base>-room` optionally suffixed with a
-// user prefix (`<base>-room-<prefix>`), matching what the server creates.
+// Room code is `<base>-room`, optionally suffixed with a per-user prefix.
 const BASE_ROOM_LANG: Record<string, { name: string; flag: string }> = {
   english: { name: "English", flag: "🇬🇧" },
   french: { name: "French", flag: "🇫🇷" },
@@ -52,7 +44,6 @@ const BASE_ROOM_LANG: Record<string, { name: string; flag: string }> = {
   italian: { name: "Italian", flag: "🇮🇹" },
 };
 
-/** Map an arbitrary room code (incl. suffixed) to a base room code + label */
 function parseRoomCode(
   roomCode: string,
 ): { base: string; label: string; flag: string } {
@@ -72,11 +63,6 @@ interface Participant {
   isMuted: boolean;
 }
 
-// ============================================================
-// Utility Functions
-// ============================================================
-
-/** Generate or retrieve a persistent tab identifier */
 function getTabId(): string {
   if (typeof window === "undefined")
     return Math.random().toString(36).substring(2, 15);
@@ -88,7 +74,6 @@ function getTabId(): string {
   return tabId;
 }
 
-/** Extract the room prefix (suffix after base room name) from a prefixed room code */
 function getRoomPrefix(roomCode: string): string {
   const { base } = parseRoomCode(roomCode);
   if (roomCode.startsWith(base) && roomCode.length > base.length) {
@@ -97,16 +82,12 @@ function getRoomPrefix(roomCode: string): string {
   return "";
 }
 
-/** Request a wake lock to prevent screen from sleeping */
 async function requestWakeLock() {
   try {
     await navigator.wakeLock.request("screen");
-  } catch {
-    // Wake lock not supported or denied
-  }
+  } catch {}
 }
 
-/** Clean up all audio resources EXCEPT the keepalive oscillator (lives across track changes) */
 function cleanupAudioResources(refs: {
   audioRef: React.MutableRefObject<HTMLAudioElement | null>;
   keepAliveRef: React.MutableRefObject<HTMLAudioElement | null>;
@@ -147,7 +128,6 @@ function cleanupAudioResources(refs: {
   }
 }
 
-/** Start a near-silent oscillator through the AudioContext to prevent iOS from suspending it */
 function startAudioKeepalive(
   ctx: AudioContext,
   oscRef: React.MutableRefObject<OscillatorNode | null>,
@@ -167,11 +147,6 @@ function startAudioKeepalive(
   } catch {}
 }
 
-// ============================================================
-// UI Components
-// ============================================================
-
-/** Name entry screen shown before joining the meeting */
 function NameEntry({
   roomCode,
   onSubmit,
@@ -181,6 +156,7 @@ function NameEntry({
   onSubmit: (name: string) => void;
   isConfigLoading: boolean;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("userName") || "";
@@ -213,9 +189,9 @@ function NameEntry({
             <Globe className="w-7 h-7 sm:w-8 sm:h-8 text-black" />
           </div>
           <h2 className="text-xl sm:text-2xl font-semibold text-white mb-2">
-            {roomDisplayName} Room
+            {t("meeting.roomName", { room: roomDisplayName })}
           </h2>
-          <p className="text-gray-500 text-sm">Enter your name to join</p>
+          <p className="text-gray-500 text-sm">{t("meeting.enterName")}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -223,7 +199,7 @@ function NameEntry({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
+            placeholder={t("meeting.yourName")}
             className="w-full px-4 py-3 bg-[#1a1a1a] text-white rounded-xl border border-[#333] focus:border-white focus:outline-none text-base sm:text-lg"
             autoFocus
           />
@@ -233,7 +209,7 @@ function NameEntry({
             disabled={!name.trim() || isConfigLoading}
             className="w-full py-3 sm:py-4 bg-white text-black rounded-xl font-medium text-base sm:text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors"
           >
-            {isConfigLoading ? "Connecting..." : "Join Room"}
+            {isConfigLoading ? t("common.connecting") : t("meeting.joinRoom")}
           </button>
         </form>
       </div>
@@ -241,7 +217,6 @@ function NameEntry({
   );
 }
 
-/** Dropdown for switching between rooms and languages */
 function LanguageSelector({
   selectedLanguage,
   onChange,
@@ -253,6 +228,7 @@ function LanguageSelector({
   onRoomChange: (newRoom: string) => void;
   currentRoom: string;
 }) {
+  const { t } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<"language" | "room">("room");
@@ -300,13 +276,13 @@ function LanguageSelector({
                 onClick={() => setActiveTab("room")}
                 className={`flex-1 py-2.5 text-sm font-medium transition-colors ${activeTab === "room" ? "text-white bg-[#252525]" : "text-gray-400 hover:text-white"}`}
               >
-                Room
+                {t("meeting.roomTab")}
               </button>
               <button
                 onClick={() => setActiveTab("language")}
                 className={`flex-1 py-2.5 text-sm font-medium transition-colors ${activeTab === "language" ? "text-white bg-[#252525]" : "text-gray-400 hover:text-white"}`}
               >
-                Language
+                {t("meeting.languageTab")}
               </button>
             </div>
 
@@ -330,7 +306,7 @@ function LanguageSelector({
                       >
                         <span className="text-lg sm:text-xl">{meta.flag}</span>
                         <span className="text-sm font-medium">
-                          {meta.name} Room
+                          {t("meeting.roomName", { room: meta.name })}
                         </span>
                         {currentRoom === base && (
                           <Volume2 className="w-4 h-4 ml-auto" />
@@ -362,7 +338,6 @@ function LanguageSelector({
     </div>
   );
 }
-/** Spotify-style scrolling lyrics display */
 function SpeakerTile({
   connectionState,
   transcriptLines,
@@ -370,6 +345,7 @@ function SpeakerTile({
   connectionState: ConnectionState;
   transcriptLines: string[];
 }) {
+  const { t } = useI18n();
   const isConnected = connectionState === ConnectionState.Connected;
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -390,7 +366,7 @@ function SpeakerTile({
             className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 animate-pulse" : "bg-gray-500"}`}
           />
           <span className="text-xs text-gray-400 font-semibold tracking-wider uppercase">
-            {isConnected ? "Live Translate" : "Connecting"}
+            {isConnected ? t("meeting.liveTranslate") : t("common.connecting")}
           </span>
         </div>
       </div>
@@ -403,7 +379,7 @@ function SpeakerTile({
       >
         {transcriptLines.length === 0 && (
           <p className="text-gray-600 text-sm text-center">
-            Waiting for translation...
+            {t("meeting.waiting")}
           </p>
         )}
         <AnimatePresence initial={false}>
@@ -440,7 +416,6 @@ function SpeakerTile({
   );
 }
 
-/** Bottom control bar with room info, language selector, and leave button */
 function ControlBar({
   onLeave,
   selectedLanguage,
@@ -460,6 +435,7 @@ function ControlBar({
   participantCount: number;
   currentRoom: string;
 }) {
+  const { t } = useI18n();
   const [playingMusic, setPlayingMusic] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null)
   useEffect(() => {
@@ -519,13 +495,12 @@ function ControlBar({
         onClick={onLeave}
         className="px-3 sm:px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg text-xs sm:text-sm transition-colors whitespace-nowrap flex-shrink-0"
       >
-        Leave
+        {t("common.leave")}
       </button>
     </div>
   );
 }
 
-/** Captions overlay at the bottom of the screen */
 function CaptionOverlay({
   isCaptionsEnabled,
   text,
@@ -533,6 +508,7 @@ function CaptionOverlay({
   isCaptionsEnabled: boolean;
   text: string;
 }) {
+  const { t } = useI18n();
   return (
     <AnimatePresence>
       {isCaptionsEnabled && (
@@ -544,10 +520,10 @@ function CaptionOverlay({
         >
           <div className="flex items-center gap-2 mb-1.5">
             <Subtitles className="w-3 sm:w-4 h-3 sm:h-4 text-gray-500" />
-            <span className="text-gray-500 text-xs">Live</span>
+            <span className="text-gray-500 text-xs">{t("meeting.captionLive")}</span>
           </div>
           <p className="text-white text-sm sm:text-base text-center">
-            {text || "Waiting for translation..."}
+            {text || t("meeting.waiting")}
           </p>
         </motion.div>
       )}
@@ -555,33 +531,30 @@ function CaptionOverlay({
   );
 }
 
-/** Full-screen overlay shown while connecting or reconnecting */
 function ConnectingOverlay({ isReconnecting }: { isReconnecting: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="fixed inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center z-50 p-4">
       <Loader2 className="w-12 h-12 text-white animate-spin mb-4" />
       <h2 className="text-white text-xl font-medium mb-2">
-        {isReconnecting ? "Reconnecting..." : "Connecting..."}
+        {isReconnecting ? t("meeting.reconnecting") : t("meeting.connecting")}
       </h2>
       <p className="text-gray-500">
         {isReconnecting
-          ? "Connection lost. Attempting to restore..."
-          : "Please wait"}
+          ? t("meeting.connectionLostRestore")
+          : t("meeting.pleaseWait")}
       </p>
     </div>
   );
 }
 
-// ============================================================
-// Main Meeting Page Component
-// ============================================================
-
 export default function MeetingPage() {
   const params = useParams();
   const router = useRouter();
+  const { t } = useI18n();
   const roomCode = params.code as string;
 
-  // ---- State ----
+  // State
   const [userName, setUserName] = useState<string>("");
   const [isJoined, setIsJoined] = useState(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>(
@@ -600,7 +573,7 @@ export default function MeetingPage() {
   const [isConfigLoading, setIsConfigLoading] = useState(true);
   const [isMicOn, setIsMicOn] = useState(false);
 
-  // ---- Refs ----
+  // Refs
   const roomRef = useRef<Room | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const keepAliveRef = useRef<HTMLAudioElement | null>(null);
@@ -615,18 +588,16 @@ export default function MeetingPage() {
   const isReconnectingRef = useRef(false);
   const micStreamRef = useRef<MediaStream | null>(null);
 
-  // ---- Memoized values ----
+  // Memoized values
   const tabId = useMemo(() => getTabId(), []);
 
   useEffect(() => {
     participantsRef.current = participants;
   }, [participants]);
 
-  // ============================================================
-  // Lifecycle Effects
-  // ============================================================
+  // Lifecycle
 
-  /** Initialize server base URL (Stefie FastAPI server) and LiveKit Cloud URL */
+  // Resolve server base URL + LiveKit URL
   useEffect(() => {
     if (typeof window === "undefined") return;
     let cancelled = false;
@@ -652,7 +623,7 @@ export default function MeetingPage() {
       return;
     }
 
-    // Ensure the server API has an accessible base for WS (metrics only; not required to join)
+    // Best-effort; joining still works if this fails.
     (async () => {
       try {
         const res = await fetch(`${base}/api/auth/config`);
@@ -676,7 +647,7 @@ export default function MeetingPage() {
     };
   }, []);
 
-  /** Reset all state when room code changes (room switching) */
+  // Reset everything when the room changes
   useEffect(() => {
     if (roomRef.current) {
       roomRef.current.disconnect();
@@ -715,7 +686,7 @@ export default function MeetingPage() {
     }
   }, [roomCode]);
 
-  /** Resume AudioContext when user returns to the tab or unlocks screen */
+  // Resume AudioContext when the tab becomes visible again
   useEffect(() => {
     const handler = () => {
       if (!document.hidden && audioContextRef.current?.state === "suspended") {
@@ -726,7 +697,7 @@ export default function MeetingPage() {
     return () => document.removeEventListener("visibilitychange", handler);
   }, []);
 
-  /** Clean up room and mic on unmount */
+  // Clean up on unmount
   useEffect(() => {
     return () => {
       if (roomRef.current) {
@@ -740,18 +711,15 @@ export default function MeetingPage() {
     };
   }, []);
 
-  /** Register service worker for background keepalive (Android) */
+  // Service worker keeps the session alive in the background
   useEffect(() => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
   }, []);
 
-  // ============================================================
-  // Connection Management
-  // ============================================================
+  // Connection
 
-  /** Connect to the LiveKit room with the given user name */
   const connect = useCallback(
     async (name: string) => {
       setUserName(name);
@@ -760,7 +728,7 @@ export default function MeetingPage() {
       setError(null);
 
       if (!livekitConfig || !livekitConfig.serverUrl) {
-        setError("Cannot connect: server did not provide a LiveKit URL.");
+        setError(t("meeting.cannotConnect"));
         setConnectionState(ConnectionState.Disconnected);
         return;
       }
@@ -785,10 +753,9 @@ export default function MeetingPage() {
             identity: `${name}_${tabId}`,
           })}`,
         );
-        if (!response.ok) throw new Error("Failed to get token");
+        if (!response.ok) throw new Error(t("meeting.failedGetToken"));
         const { token } = await response.json();
 
-        // Create and configure LiveKit room
         const { Room } = await import("livekit-client");
         const room = new Room({
           adaptiveStream: true,
@@ -796,7 +763,7 @@ export default function MeetingPage() {
         });
         roomRef.current = room;
 
-        // ---- Event: Track subscribed (set up audio playback) ----
+        // Track subscribed — set up audio playback
         room.on("trackSubscribed", (track) => {
           if (track instanceof RemoteAudioTrack) {
             // Primary: route audio through Web Audio API (survives background on iOS)
@@ -837,11 +804,11 @@ export default function MeetingPage() {
             // Update media session metadata
             if ("mediaSession" in navigator) {
               navigator.mediaSession.metadata = new MediaMetadata({
-                title: "Live Meeting",
+                title: t("meeting.liveTitle"),
                 artist:
                   participantsRef.current.map((p) => p.name).join(", ") ||
-                  "Participants",
-                album: "LiveKit Audio",
+                  t("meeting.participantsArtist"),
+                album: t("meeting.mediaAlbum"),
               });
             }
           }
@@ -859,39 +826,39 @@ export default function MeetingPage() {
           }
         });
 
-        // ---- Event: Participant joined ----
+        // Participant joined
         room.on("participantConnected", (p) => {
           setParticipants((prev) => [
             ...prev,
             {
               id: p.identity,
-              name: p.name || "User",
+              name: p.name || t("meeting.user"),
               isSpeaking: false,
               isMuted: true,
             },
           ]);
         });
 
-        // ---- Event: Participant left ----
+        // Participant left
         room.on("participantDisconnected", (p) => {
           setParticipants((prev) =>
             prev.filter((participant) => participant.id !== p.identity),
           );
         });
 
-        // ---- Event: Reconnecting (connection temporarily lost) ----
+        // Reconnecting
         room.on("reconnecting", () => {
           isReconnectingRef.current = true;
           setConnectionState(ConnectionState.Reconnecting);
         });
 
-        // ---- Event: Reconnected (connection restored after temporary loss) ----
+        // Reconnected
         room.on("reconnected", () => {
           isReconnectingRef.current = false;
           setConnectionState(ConnectionState.Connected);
         });
 
-        // ---- Event: Data received (translated text or error from engine) ----
+        // Translated text (or engine error) over the data channel
         room.on("dataReceived", (payload) => {
           try {
             const text = new TextDecoder().decode(payload);
@@ -908,11 +875,10 @@ export default function MeetingPage() {
           } catch {}
         });
 
-        // ---- Event: Room disconnected (cleanup and handle reconnect failure) ----
+        // Room disconnected
         room.on("disconnected", (reason?: DisconnectReason) => {
           isReconnectingRef.current = false;
 
-          // Clean up all resources
           setParticipants([]);
           setLiveTranscript("");
           setTranscriptLines([]);
@@ -935,16 +901,14 @@ export default function MeetingPage() {
           if (roomRef.current === room) {
             setConnectionState(ConnectionState.Disconnected);
             if (!isIntentional) {
-              setError("Connection lost. Please rejoin the meeting.");
+              setError(t("meeting.connectionLostRejoin"));
             }
           }
         });
 
-        // Connect to the LiveKit server
         await room.connect(livekitConfig.serverUrl, token);
         setConnectionState(ConnectionState.Connected);
 
-        // Initialize participant list
         const initialParticipants = [
           {
             id: room.localParticipant.identity,
@@ -956,26 +920,24 @@ export default function MeetingPage() {
         room.remoteParticipants.forEach((p) => {
           initialParticipants.push({
             id: p.identity,
-            name: p.name || "User",
+            name: p.name || t("meeting.user"),
             isSpeaking: false,
             isMuted: true,
           });
         });
         setParticipants(initialParticipants);
 
-        // Request wake lock to prevent screen sleep
         requestWakeLock();
       } catch (err) {
         console.error("Connection error:", err);
         isReconnectingRef.current = false;
-        setError(err instanceof Error ? err.message : "Connection failed");
+        setError(err instanceof Error ? err.message : t("meeting.connectFailed"));
         setConnectionState(ConnectionState.Disconnected);
       }
     },
-    [livekitConfig, roomCode, tabId],
+    [livekitConfig, roomCode, tabId, t],
   );
   
-  /** Leave the meeting and return to home */
   const handleLeave = useCallback(() => {
     if (roomRef.current) {
       roomRef.current.disconnect();
@@ -1009,7 +971,6 @@ export default function MeetingPage() {
     router.push("/");
   }, [router]);
 
-  /** Switch to a different room */
   const handleRoomChange = useCallback(
     (newRoom: string) => {
       if (roomRef.current) {
@@ -1023,7 +984,6 @@ export default function MeetingPage() {
     [router],
   );
 
-  /** Toggle microphone on/off */
   const toggleMic = useCallback(async () => {
     const newMicState = !isMicOn;
     try {
@@ -1053,9 +1013,7 @@ export default function MeetingPage() {
     setIsMicOn(newMicState);
   }, [isMicOn]);
 
-  // ============================================================
   // Derived state
-  // ============================================================
 
   const isConnecting =
     connectionState === ConnectionState.Connecting ||
@@ -1063,14 +1021,12 @@ export default function MeetingPage() {
   const isReconnecting = connectionState === ConnectionState.Reconnecting;
   const roomDisplayName = parseRoomCode(roomCode).label || roomCode;
 
-  // ============================================================
   // Render
-  // ============================================================
 
   if (!roomCode)
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center text-white p-4 text-center">
-        Invalid room
+        {t("meeting.invalidRoom")}
       </div>
     );
 
@@ -1102,32 +1058,34 @@ export default function MeetingPage() {
         </div>
       )}
 
-      {/* Top bar with back button, room info, and participant count */}
       <div className="flex-shrink-0 flex items-center justify-between px-3 pt-3 pb-2 z-30">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <button
-            onClick={handleLeave}
-            className="p-2 hover:bg-[#1a1a1a] rounded-lg text-gray-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#1a1a1a] rounded-lg">
-            <Wifi
-              className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${connectionState === ConnectionState.Connected ? "text-green-500" : "text-gray-500"}`}
-            />
-            <span className="text-gray-400 text-xs sm:text-sm">
-              {roomDisplayName}
-            </span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <button
+              onClick={handleLeave}
+              className="p-2 hover:bg-[#1a1a1a] rounded-lg text-gray-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#1a1a1a] rounded-lg">
+              <Wifi
+                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${connectionState === ConnectionState.Connected ? "text-green-500" : "text-gray-500"}`}
+              />
+              <span className="text-gray-400 text-xs sm:text-sm">
+                {roomDisplayName}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#1a1a1a] rounded-lg">
+              <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
+              <span className="text-gray-400 text-xs sm:text-sm">
+                {participants.length}
+              </span>
+            </div>
+            <UILangSwitcher />
           </div>
         </div>
-
-        <div className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 bg-[#1a1a1a] rounded-lg">
-          <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
-          <span className="text-gray-400 text-xs sm:text-sm">
-            {participants.length}
-          </span>
-        </div>
-      </div>
 
       {/* Main speaker tile — flex-1 fills remaining space */}
       <div className="flex-1 flex flex-col items-center justify-center px-4 pb-4">

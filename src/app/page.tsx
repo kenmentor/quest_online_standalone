@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Sun, Moon } from "lucide-react";
 import ConfigWizard from "./components/ConfigWizard";
 import ConfigPopup from "./components/ConfigPopup";
 import Toast from "./components/Toast";
-import { api, auth as authApi, connectTranscripts, connectLogs, getApiBase } from "../lib/api";
+import UILangSwitcher from "./components/UILangSwitcher";
+import { api, auth as authApi, connectTranscripts, connectLogs, getApiBase, getWsBase } from "../lib/api";
+import { useI18n } from "../lib/i18n";
 import styles from "./components/sam.module.css";
 
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -20,40 +23,9 @@ function Spinner() {
   return <span className={styles.spinner}>{frames[i]}</span>;
 }
 
-function Visualizer({ active }: { active: boolean }) {
-  const BARS = 20;
-  const [heights, setHeights] = useState<number[]>(Array(BARS).fill(2));
-
-  useEffect(() => {
-    if (!active) {
-      setHeights(Array(BARS).fill(2));
-      return;
-    }
-    const id = setInterval(() => {
-      setHeights(
-        Array(BARS)
-          .fill(0)
-          .map(() => Math.random() * 26 + 3),
-      );
-    }, 80);
-    return () => clearInterval(id);
-  }, [active]);
-
-  return (
-    <div className={styles.visualizer}>
-      {heights.map((h, i) => (
-        <div
-          key={i}
-          className={`${styles.bar} ${active ? styles.barActive : ""}`}
-          style={{ height: h + "px" }}
-        />
-      ))}
-    </div>
-  );
-}
-
 function LogViewer({ logs }: { logs: string[] }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { t } = useI18n();
 
   useEffect(() => {
     if (ref.current) {
@@ -64,7 +36,7 @@ function LogViewer({ logs }: { logs: string[] }) {
   return (
     <div className={styles.logViewer} ref={ref}>
       {logs.length === 0 ? (
-        <span className={styles.logEmpty}>no livekit logs yet…</span>
+        <span className={styles.logEmpty}>{t("console.logEmpty")}</span>
       ) : (
         logs.map((line, i) => (
           <div key={i} className={styles.logLine}>
@@ -76,15 +48,103 @@ function LogViewer({ logs }: { logs: string[] }) {
   );
 }
 
+interface FeedItem {
+  id: number;
+  source: string;
+  targets: Record<string, string>;
+}
+
+function FeedRow({ item, tag }: { item: FeedItem; tag: string }) {
+  const { t } = useI18n();
+  const translated = item.targets[tag];
+  return (
+    <div className={styles.feedItem}>
+      <div className={styles.feedBlock}>
+        <span className={styles.feedTag}>{t("console.sourceLabel")}</span>
+        <span className={styles.feedSource}>{`"${item.source}"`}</span>
+      </div>
+      <div className={styles.feedBlock}>
+        <span className={styles.feedTag}>{t("console.targetLabel", { tag: tag.toUpperCase() })}</span>
+        {translated != null ? (
+          <span className={styles.feedTarget}>{`"${translated}"`}</span>
+        ) : (
+          <span className={styles.feedTranslating}>{t("console.translating")}</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function fmtMbps(mbps: number): string {
+  if (!mbps || mbps <= 0) return "–";
+  return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(mbps * 1000)} Kbps`;
+}
+
+type Translate = (key: string, vars?: Record<string, unknown>) => string;
+
+function speedMeta(
+  mbps: number,
+  slow: number,
+  fast: number,
+  t: Translate,
+): { label: string; cls: string } {
+  if (mbps <= 0) return { label: t("console.speedDash"), cls: "" };
+  if (mbps < slow) return { label: t("console.speedSlow"), cls: styles.speedSlow };
+  if (mbps < fast) return { label: t("console.speedMedium"), cls: styles.speedMedium };
+  return { label: t("console.speedFast"), cls: styles.speedFast };
+}
+
+async function measureDownload(): Promise<number> {
+  try {
+    const t0 = performance.now();
+    const res = await fetch("https://speed.cloudflare.com/__down?bytes=4000000", { cache: "no-store" });
+    const buf = await res.arrayBuffer();
+    const secs = (performance.now() - t0) / 1000;
+    if (secs <= 0) return 0;
+    return (buf.byteLength * 8) / secs / 1_000_000;
+  } catch {
+    return 0;
+  }
+}
+
+async function measureUpload(): Promise<number> {
+  try {
+    const chunkBytes = 200 * 1024;
+    const totalBytes = 4_000_000;
+    const body = new Blob([new Uint8Array(chunkBytes)]);
+    const t0 = performance.now();
+    let sent = 0;
+    while (sent < totalBytes) {
+      await fetch("https://speed.cloudflare.com/__up", { method: "POST", body, cache: "no-store" });
+      sent += chunkBytes;
+    }
+    const secs = (performance.now() - t0) / 1000;
+    return secs > 0 ? (sent * 8) / secs / 1_000_000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export default function Home() {
+  const { t } = useI18n();
   const router = useRouter();
   const [phase, setPhase] = useState<"startup" | "console">("startup");
   const [authed, setAuthed] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [hasServer, setHasServer] = useState(false);
   const [engineState, setEngineState] = useState("IDLE");
-  const [statusMsg, setStatusMsg] = useState("idle — press connect");
-  const [statusIsError, setStatusIsError] = useState(false);
+  const [dark, setDark] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      return localStorage.getItem("stefie_theme") !== "light";
+    } catch {
+      return true;
+    }
+  });
   const [micConfig, setMicConfig] = useState<{ deviceId: string; deviceName: string; threshold: number } | null>(() => {
     if (typeof window === "undefined") return null;
     const saved = localStorage.getItem("mic_config");
@@ -93,14 +153,17 @@ export default function Home() {
   });
   const [instances, setInstances] = useState<{ tag: string; name: string; modelName: string; clients: number; roomName?: string }[]>([]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [viewTag, setViewTag] = useState<string | null>(null);
+  const [feed, setFeed] = useState<FeedItem[]>([]);
+  const [speed, setSpeed] = useState<{ dl: number; ul: number } | null>(null);
   const [showConfigPopup, setShowConfigPopup] = useState(false);
   const [addBtnEnabled, setAddBtnEnabled] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
-  const [showLogs, setShowLogs] = useState(false);
-  const [shareLink, setShareLink] = useState("");
   const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
 
   const toastIdRef = useRef(0);
+  const feedIdRef = useRef(0);
+  const feedScrollRef = useRef<HTMLDivElement>(null);
   const wsTranscriptsRef = useRef<WebSocket | null>(null);
   const wsLogsRef = useRef<WebSocket | null>(null);
   const audioWsRef = useRef<WebSocket | null>(null);
@@ -147,6 +210,14 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Theme (dark = default, mirrors sam-v2-livekit-cloud toggle)
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    try {
+      localStorage.setItem("stefie_theme", dark ? "dark" : "light");
+    } catch {}
+  }, [dark]);
+
   const showToast = useCallback((m: string, level: "info" | "error" = "error") => {
     const id = ++toastIdRef.current;
     setToasts(p => [...p, { id, message: m, level }]);
@@ -192,11 +263,11 @@ export default function Home() {
     setAuthed(false);
     setPhase("startup");
     setInstances([]);
+    setFeed([]);
     setLogs([]);
     setSelectedTag(null);
+    setViewTag(null);
     setEngineState("IDLE");
-    setStatusMsg("idle — press connect");
-    setStatusIsError(false);
     try { await authApi.logout(); } catch {}
     localStorage.removeItem("auth_token");
     localStorage.removeItem("auth_user");
@@ -206,68 +277,59 @@ export default function Home() {
     localStorage.removeItem("selected_tag");
     loggingOutRef.current = false;
     router.replace("/auth" + window.location.search);
-  }, [router]);
+  }, [router, t]);
 
   const selectedInstance = instances.find(i => i.tag === selectedTag) || instances[0];
-  const langLabel = selectedInstance ? selectedInstance.name.toUpperCase() : "";
+  const currentTag = viewTag && instances.some(i => i.tag === viewTag) ? viewTag : (instances[0]?.tag ?? null);
 
   const handleEngineAction = useCallback(async () => {
     if (engineState === "IDLE") {
-      if (instances.length === 0) { showToast("ERROR: Cannot start engine without a target language configured.", "error"); return; }
+      if (instances.length === 0) { showToast(t("console.noLangError"), "error"); return; }
       setEngineState("INIT");
       setAddBtnEnabled(false);
-      setStatusMsg("starting translation engines…");
-      setStatusIsError(false);
       try {
         const res = await api.startListening();
         setEngineState(res.state);
         setAddBtnEnabled(true);
-        setStatusMsg(`connected · room: ${selectedInstance?.roomName ?? ""}`);
-        setStatusIsError(false);
         addLog("[INFO] Server started listening");
         startAudioCapture();
       } catch (e: unknown) {
         setEngineState("IDLE");
         setAddBtnEnabled(true);
-        setStatusMsg(`start failed: ${e instanceof Error ? e.message : e}`);
-        setStatusIsError(true);
-        showToast(`ERROR: Failed to start: ${e instanceof Error ? e.message : e}`, "error");
-        addLog(`[ERROR] Failed to start listening: ${e instanceof Error ? e.message : e}`);
+        showToast(t("console.toastStartFailed", { msg: errMsg(e) }), "error");
+        addLog(`[ERROR] Failed to start listening: ${errMsg(e)}`);
       }
     } else if (engineState === "RECORDING") {
-      setEngineState("IDLE");
+      setEngineState("PAUSED");
       setAddBtnEnabled(true);
       try {
-        await api.stopListening();
+        await api.pauseListening();
         stopAudioCapture();
-        setStatusMsg("disconnected");
-        setStatusIsError(false);
-        showToast("Recording stopped.", "info");
-        addLog("[INFO] Server stopped listening");
+        addLog("[INFO] Server paused listening");
       } catch (e: unknown) {
-        showToast(`ERROR: Failed to stop: ${e instanceof Error ? e.message : e}`, "error");
+        setEngineState("RECORDING");
+        showToast(t("console.toastPauseFailed", { msg: errMsg(e) }), "error");
       }
     } else if (engineState === "PAUSED") {
       setEngineState("RECORDING");
       try {
         await api.resumeListening();
         startAudioCapture();
-        setStatusMsg(`connected · room: ${selectedInstance?.roomName ?? ""}`);
-        setStatusIsError(false);
         addLog("[INFO] Server resumed listening");
       } catch (e: unknown) {
-        showToast(`ERROR: Failed to resume: ${e instanceof Error ? e.message : e}`, "error");
+        setEngineState("PAUSED");
+        showToast(t("console.toastResumeFailed", { msg: errMsg(e) }), "error");
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineState, instances.length, selectedInstance?.roomName, showToast, addLog]);
+  }, [engineState, instances.length, selectedInstance?.roomName, showToast, addLog, t]);
 
   function startAudioCapture() {
     if (!micConfig) return;
     navigator.mediaDevices.getUserMedia({
       audio: {
         deviceId: micConfig.deviceId ? { exact: micConfig.deviceId } : undefined,
-        sampleRate: 24000,
+        sampleRate: 16000,
         channelCount: 1,
         echoCancellation: true,
       },
@@ -275,14 +337,15 @@ export default function Home() {
       audioStreamRef.current = stream;
       const wsUrl = getApiBase().replace(/^http/, 'ws');
       const token = localStorage.getItem('auth_token') || '';
-      const ws = new WebSocket(`${wsUrl}/api/ws/audio?token=${encodeURIComponent(token)}`);
+      const threshold = micConfig.threshold ?? 10;
+      const ws = new WebSocket(`${wsUrl}/api/ws/audio?token=${encodeURIComponent(token)}&threshold=${threshold}`);
       audioWsRef.current = ws;
 
       let ready = false;
       ws.onopen = () => { ready = true; addLog("[INFO] Audio WebSocket connected."); };
       ws.onerror = () => addLog("[ERROR] Audio WebSocket error.");
 
-      const ctx = new AudioContext({ sampleRate: 24000 });
+      const ctx = new AudioContext({ sampleRate: 16000 });
       audioContextRef.current = ctx;
       ctx.resume().then(() => {
         const source = ctx.createMediaStreamSource(stream);
@@ -309,8 +372,8 @@ export default function Home() {
         addLog("[WARN] Audio WebSocket disconnected.");
       };
     }).catch((e) => {
-      showToast(`ERROR: Could not access microphone: ${e instanceof Error ? e.message : e}`, "error");
-      addLog(`[ERROR] Microphone access denied: ${e instanceof Error ? e.message : e}`);
+      showToast(t("console.toastMic", { msg: errMsg(e) }), "error");
+      addLog(`[ERROR] Microphone access denied: ${errMsg(e)}`);
     });
   }
 
@@ -333,8 +396,8 @@ export default function Home() {
     setMicConfig(c);
     setPhase("console");
     addLog(`[INFO] Mic selected: ${c.deviceName}`);
-    showToast("Application initialized.", "info");
-  }, [showToast, addLog]);
+    showToast(t("console.toastInit"), "info");
+  }, [showToast, addLog, t]);
 
   const addInstance = useCallback(async (tag: string, name: string) => {
     let nextInstances: typeof instances = [];
@@ -344,7 +407,7 @@ export default function Home() {
       nextInstances = [...prev, newInst];
       return nextInstances;
     });
-    if (nextInstances.length === 0) { showToast(`ERROR: Instance for '${name}' is already active.`, "error"); return; }
+    if (nextInstances.length === 0) { showToast(t("console.toastAlreadyActive", { name }), "error"); return; }
     try {
       await api.addEngine({
         language_tag: tag,
@@ -354,36 +417,16 @@ export default function Home() {
         model_json_path: "",
         model_level: "",
       });
-      showToast(`Added engine: ${name} (${tag})`, "info");
+      showToast(t("console.toastAddedEngine", { name, tag }), "info");
       addLog(`[INFO] Added engine: ${name} (${tag})`);
       if (!selectedTag) { setSelectedTag(tag); }
     } catch (e: unknown) {
-      showToast(`ERROR: Failed to add engine: ${e instanceof Error ? e.message : e}`, "error");
+      showToast(t("console.toastAddEngineFailed", { msg: errMsg(e) }), "error");
       setInstances(prev => prev.filter(i => i.tag !== tag));
     }
     setShowConfigPopup(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTag, showToast, addLog]);
-
-  const copyShareLink = useCallback(() => {
-    if (!shareLink) return;
-    navigator.clipboard.writeText(shareLink).then(() => {
-      showToast("Share link copied to clipboard!", "info");
-      addLog("[INFO] Share link copied.");
-    }).catch(() => {
-      showToast("ERROR: Failed to copy link", "error");
-    });
-  }, [shareLink, showToast, addLog]);
-
-  // Generate share link for listeners (deep-link into this app's meeting page)
-  useEffect(() => {
-    if (!selectedInstance) { setShareLink(""); return; }
-    const roomName = selectedInstance.roomName || `${selectedInstance.name.toLowerCase().replace(' ', '-')}-room`;
-    const base = (typeof window !== "undefined" ? window.location.origin : "http://localhost:3001").replace(/\/+$/, "");
-    const server = getApiBase();
-    const qs = server ? `?server=${encodeURIComponent(server)}` : "";
-    setShareLink(`${base}/meeting/${roomName}${qs}`);
-  }, [selectedInstance]);
+  }, [selectedTag, showToast, addLog, t]);
 
   // Restore engines from server on console load
   useEffect(() => {
@@ -405,18 +448,14 @@ export default function Home() {
       if (entries.length > 0) setLogs(entries);
     }).catch(() => {});
     api.getStatus().then((status) => {
-      if (status.state === "RECORDING") {
-        setEngineState("RECORDING");
-        setStatusMsg("connected · live translation");
-        setStatusIsError(false);
-      } else if (status.state === "PAUSED") {
-        setEngineState("PAUSED");
+      if (status.state === "RECORDING" || status.state === "PAUSED") {
+        setEngineState(status.state);
       }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, authed, addLog]);
+  }, [phase, authed, addLog, t]);
 
-  // Transcripts WebSocket — feeds source + translated text into the log viewer
+  // Transcripts WebSocket — feeds source + translated text into the feed view
   useEffect(() => {
     if (phase !== "console" || !authed) return;
     let cancelled = false;
@@ -425,10 +464,23 @@ export default function Home() {
       if (cancelled) return;
       const ws = connectTranscripts(
         (source) => {
-          if (!cancelled) addLog(`[SRC] ${source}`);
+          if (cancelled) return;
+          addLog(`[SRC] ${source}`);
+          setFeed(p => {
+            const id = ++feedIdRef.current;
+            return [...p, { id, source, targets: {} }].slice(-40);
+          });
         },
         (tag, source, translated) => {
-          if (!cancelled) addLog(`[→ ${tag}] ${translated}`);
+          if (cancelled) return;
+          addLog(`[→ ${tag}] ${translated}`);
+          setFeed(p =>
+            p.map(item =>
+              item.source === source && !(tag in item.targets)
+                ? { ...item, targets: { ...item.targets, [tag]: translated } }
+                : item,
+            ),
+          );
         },
       );
       wsTranscriptsRef.current = ws;
@@ -485,13 +537,31 @@ export default function Home() {
         }));
         if (status.state === "RECORDING" && engineStateRef.current !== "RECORDING" && engineStateRef.current !== "INIT" && engineStateRef.current !== "PAUSED") {
           setEngineState("RECORDING");
-          setStatusMsg("connected · live translation");
-          setStatusIsError(false);
         }
       } catch {}
     };
     poll();
     const i = setInterval(poll, 5000);
+    return () => { cancelled = true; clearInterval(i); };
+  }, [phase, authed, t]);
+
+  // Auto-scroll transcript feed to the latest item
+  useEffect(() => {
+    if (feedScrollRef.current) {
+      feedScrollRef.current.scrollTop = feedScrollRef.current.scrollHeight;
+    }
+  }, [feed]);
+
+  // Internet speed measurement (Cloudflare, mirrors SpeedWorker)
+  useEffect(() => {
+    if (phase !== "console" || !authed) return;
+    let cancelled = false;
+    const measure = async () => {
+      const [dl, ul] = await Promise.all([measureDownload(), measureUpload()]);
+      if (!cancelled) setSpeed({ dl, ul });
+    };
+    measure();
+    const i = setInterval(measure, 60000);
     return () => { cancelled = true; clearInterval(i); };
   }, [phase, authed]);
 
@@ -502,8 +572,8 @@ export default function Home() {
       <div className={styles.root}>
         <div className={styles.main}>
           <div className={styles.card} style={{ textAlign: "center" }}>
-            <p className={styles.statusText}>No Stefie server reachable. Open the app with your server link (?server=your-ngrok-link).</p>
-            <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleLogout}>GO TO SIGN IN</button>
+            <p className={styles.statusText}>{t("console.noServer")}</p>
+            <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleLogout}>{t("console.goSignIn")}</button>
           </div>
         </div>
       </div>
@@ -514,105 +584,177 @@ export default function Home() {
 
   const isConnected = engineState === "RECORDING" || engineState === "PAUSED";
   const isConnecting = engineState === "INIT";
-  const isError = statusIsError;
   const badgeText = isConnected
-    ? `LIVE · ${langLabel || "LIVE"}`
-    : isConnecting
-      ? "CONNECTING"
-      : isError
-        ? "ERROR"
-        : "OFFLINE";
+    ? t("console.badgeLiveKit")
+    : t("console.badgeDisconnected");
   const totalClients = instances.reduce((n, i) => n + i.clients, 0);
-  const activeClients = totalClients > 0;
+
+  const buttonLabel = isConnecting
+    ? (<><Spinner />{t("console.initializing")}</>)
+    : engineState === "RECORDING"
+      ? t("console.recording")
+      : engineState === "PAUSED"
+        ? t("console.resumeListening")
+        : t("console.initListening");
+
+  const buttonClass = isConnecting
+    ? `${styles.actionBtn} ${styles.btnInitializing}`
+    : engineState === "RECORDING"
+      ? `${styles.actionBtn} ${styles.btnRecording}`
+      : engineState === "PAUSED"
+        ? `${styles.actionBtn} ${styles.btnPaused}`
+        : styles.actionBtn;
+
+  const dlMeta = speed
+    ? speedMeta(speed.dl, 5, 25, t)
+    : null;
+  const ulMeta = speed
+    ? speedMeta(speed.ul, 2, 10, t)
+    : null;
 
   return (
     <div className={styles.root}>
-      <header className={styles.header}>
-        <div className={styles.logo}>STEFIE</div>
-        <div className={`${styles.badge} ${isConnected ? styles.badgeActive : isError ? styles.badgeError : ""}`}>
-          <span className={styles.badgeDot} />
-          {badgeText}
-        </div>
-      </header>
+      <div className={styles.panes}>
 
-      <main className={styles.main}>
-        <div className={styles.card}>
-          <Visualizer active={isConnected} />
+        {/* LEFT SIDEBAR — logo, theme, instances, system logs */}
+        <aside className={styles.sidebarLeft}>
+          <div className={styles.paneHeaderRow}>
+            <div className={styles.logo}>STEFIE</div>
+            <div className={styles.paneHeaderRight}>
+              <UILangSwitcher />
+              <button
+                className={styles.themeBtn}
+                onClick={() => setDark(d => !d)}
+                aria-label="Toggle theme"
+                title="Toggle theme"
+              >
+                {dark ? <Moon className={styles.themeIcon} /> : <Sun className={styles.themeIcon} />}
+              </button>
+            </div>
+          </div>
 
-          <p className={`${styles.statusText} ${isError ? styles.statusError : ""}`}>
-            {isConnecting && <Spinner />}
-            {statusMsg}
-          </p>
+          <span className={styles.sectionTitle}>{t("console.instancesTitle")}</span>
 
-          {instances.length > 0 && (
-            <div className={styles.langRow}>
-              {instances.map(i => (
-                <span key={i.tag} className={styles.langTag}>{i.tag}</span>
+          <div className={styles.instanceList}>
+            {instances.map((inst, idx) => (
+              <button
+                key={inst.tag}
+                className={`${styles.instanceItem} ${inst.tag === (selectedTag ?? instances[0]?.tag) ? styles.instanceItemActive : ""}`}
+                onClick={() => setSelectedTag(inst.tag)}
+              >
+                {`Instance ${String(idx + 1).padStart(2, "0")} (EN - ${inst.name})`}
+              </button>
+            ))}
+          </div>
+
+          <button
+            className={styles.addBtn}
+            disabled={isConnected || isConnecting || !addBtnEnabled}
+            onClick={() => setShowConfigPopup(true)}
+          >
+            {t("console.newInstance")}
+          </button>
+
+          <div className={styles.sidebarSpacer} />
+
+          <span className={styles.sectionTitle}>{t("console.systemLogs")}</span>
+          <LogViewer logs={logs} />
+        </aside>
+
+        {/* CENTER — engine console */}
+        <main className={styles.centerPane}>
+          <div className={styles.paneHeaderRow}>
+            <span className={styles.consoleTitle}>{t("console.engineConsole")}</span>
+            <span className={`${styles.statBadge} ${isConnected ? styles.statBadgeActive : ""}`}>
+              {badgeText}
+            </span>
+          </div>
+
+          <div className={styles.hline} />
+
+          <button className={buttonClass} onClick={handleEngineAction} disabled={isConnecting}>
+            {buttonLabel}
+          </button>
+
+          <div className={styles.feedHeaderRow}>
+            <span className={styles.subLabel}>{t("console.transcriptStream")}</span>
+            <div className={styles.langToggles}>
+              {instances.map(inst => (
+                <button
+                  key={inst.tag}
+                  className={`${styles.langToggle} ${currentTag === inst.tag ? styles.langToggleActive : ""}`}
+                  onClick={() => setViewTag(inst.tag)}
+                >
+                  {inst.tag.toUpperCase()}
+                </button>
               ))}
             </div>
-          )}
-
-          {activeClients && (
-            <div className={styles.participants}>
-              <span className={styles.sectionLabel}>PARTICIPANTS</span>
-              <div className={styles.pillRow}>
-                {instances.filter(i => i.clients > 0).map(i => (
-                  <span key={i.tag} className={styles.pill}>
-                    <span className={styles.pillDot} />
-                    {i.name} · {i.clients}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className={styles.actionsRow}>
-            <button
-              className={styles.btnGhost}
-              disabled={engineState === "RECORDING" || engineState === "PAUSED"}
-              onClick={() => setShowConfigPopup(true)}
-            >
-              + Add Language
-            </button>
-            <button className={styles.btnGhost} onClick={copyShareLink}>
-              Share
-            </button>
-            <button className={styles.btnGhost} onClick={handleLogout}>
-              Exit
-            </button>
           </div>
 
-          <div className={styles.actions}>
-            {!isConnected ? (
-              <button
-                className={`${styles.btn} ${styles.btnPrimary} ${isConnecting ? styles.btnLoading : ""}`}
-                onClick={handleEngineAction}
-                disabled={isConnecting}
-              >
-                {isConnecting ? (
-                  <>
-                    <Spinner />
-                    CONNECTING…
-                  </>
-                ) : (
-                  "CONNECT"
-                )}
-              </button>
+          <div className={styles.transcriptScroll} ref={feedScrollRef}>
+            {feed.length === 0 ? (
+              <div className={styles.feedEmpty}>{t("console.waitingSpeech")}</div>
             ) : (
-              <button className={`${styles.btn} ${styles.btnDanger}`} onClick={handleEngineAction}>
-                {engineState === "RECORDING" ? "DISCONNECT" : "RESUME"}
-              </button>
+              currentTag && feed.map(item => <FeedRow key={item.id} item={item} tag={currentTag} />)
             )}
           </div>
-        </div>
+        </main>
 
-        <div className={styles.logSection}>
-          <button className={styles.logToggle} onClick={() => setShowLogs(v => !v)}>
-            {showLogs ? "▲" : "▼"} LIVEKIT SERVER LOGS
-          </button>
-          {showLogs && <LogViewer logs={logs} />}
-        </div>
-      </main>
+        {/* RIGHT SIDEBAR — server & network, internet speed */}
+        <aside className={styles.sidebarRight}>
+          <span className={styles.sectionTitle}>{t("console.serverNetwork")}</span>
+
+          <div className={styles.infoRow}>
+            <span className={styles.subLabel}>{t("console.connectedClients")}</span>
+            <span className={styles.valueText}>{totalClients}</span>
+          </div>
+
+          <div className={styles.infoRow}>
+            <span className={styles.subLabel}>{t("console.emitThreshold")}</span>
+            <span className={styles.valueText}>{t("console.thresholdWords", { n: micConfig?.threshold ?? 10 })}</span>
+          </div>
+
+          <span className={styles.subLabel}>{t("console.frontendUrl")}</span>
+          <input
+            className={styles.readonlyInput}
+            readOnly
+            value={getApiBase() || "—"}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+
+          <span className={styles.subLabel}>{t("console.websocketUrl")}</span>
+          <input
+            className={styles.readonlyInput}
+            readOnly
+            value={getWsBase() || "—"}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+
+          <span className={styles.subLabel}>{t("console.roomName")}</span>
+          <input
+            className={styles.readonlyInput}
+            readOnly
+            value={selectedInstance?.roomName ?? "—"}
+            onFocus={(e) => e.currentTarget.select()}
+          />
+
+          <div className={styles.sidebarSpacer} />
+
+          <span className={styles.sectionTitle}>{t("console.internetSpeed")}</span>
+
+          <div className={styles.speedRow}>
+            <span className={styles.subLabel}>{t("console.download")}</span>
+            <span className={styles.valueText}>{speed ? fmtMbps(speed.dl) : "–"}</span>
+            {dlMeta && <span className={`${styles.speedBadge} ${dlMeta.cls}`}>{dlMeta.label}</span>}
+          </div>
+
+          <div className={styles.speedRow}>
+            <span className={styles.subLabel}>{t("console.upload")}</span>
+            <span className={styles.valueText}>{speed ? fmtMbps(speed.ul) : "–"}</span>
+            {ulMeta && <span className={`${styles.speedBadge} ${ulMeta.cls}`}>{ulMeta.label}</span>}
+          </div>
+        </aside>
+      </div>
 
       {showConfigPopup && <ConfigPopup onClose={() => setShowConfigPopup(false)} onSave={addInstance} />}
       {toasts.map(t => <Toast key={t.id} message={t.message} level={t.level} onClose={() => removeToast(t.id)} />)}

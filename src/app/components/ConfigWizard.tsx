@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { getBrowserMics } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
 
 interface ConfigWizardProps {
   onLaunch: (config: { deviceId: string; deviceName: string; threshold: number }) => void;
 }
 
 export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
+  const { t } = useI18n();
   const [phase, setPhase] = useState<"splash" | "config">("splash");
   const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
   const [selectedMic, setSelectedMic] = useState(0);
@@ -28,7 +30,7 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
     if (phase !== "config") return;
     getBrowserMics()
       .then((devices) => {
-        if (devices.length === 0) setMicError("No microphones found. Please connect a microphone.");
+        if (devices.length === 0) setMicError(t("wizard.noMics"));
         setMics(devices);
         const saved = localStorage.getItem("mic_config");
         if (saved) try {
@@ -37,8 +39,8 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
           if (idx >= 0) setSelectedMic(idx);
         } catch {}
       })
-      .catch(() => setMicError("Could not access microphones. Please allow microphone permission."));
-  }, [phase]);
+      .catch(() => setMicError(t("wizard.micDenied")));
+  }, [phase, t]);
 
   if (phase === "splash") {
     return (
@@ -54,12 +56,12 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
   return (
     <div className="fixed inset-0 overflow-y-auto" style={{ background: "#030303" }}>
       <div className="max-w-2xl mx-auto p-6 space-y-6">
-        <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "#666666" }}>MICROPHONE INPUT DEVICE</p>
-        <p className="text-xs leading-relaxed" style={{ color: "#888888" }}>Select the microphone the browser will use for audio capture.</p>
+        <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "#666666" }}>{t("wizard.micTitle")}</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#888888" }}>{t("wizard.micDesc")}</p>
         <div className="space-y-0.5 max-h-[160px] overflow-y-auto scrollbar-thin">
           {mics.length === 0 && (
             <p className="text-xs" style={{ color: micError ? "#ef4444" : "#888888" }}>
-              {micError || "Detecting microphones..."}
+              {micError || t("wizard.detecting")}
             </p>
           )}
           {mics.map((mic, i) => (
@@ -68,15 +70,15 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
               <input type="radio" name="mic" checked={selectedMic === i} onChange={() => setSelectedMic(i)}
                 className="appearance-none w-3.5 h-3.5 rounded-full border shrink-0"
                 style={{ border: selectedMic === i ? "3px solid #ffffff" : "1px solid #333333", background: selectedMic === i ? "#ffffff" : "#000000", outline: selectedMic === i ? "1px solid #ffffff" : "none" }} />
-              {mic.label || `Microphone ${i + 1}`}
+              {mic.label || t("wizard.micFallback", { n: i + 1 })}
             </label>
           ))}
         </div>
 
-        <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "#666666" }}>ENGINE PARAMETERS</p>
-        <p className="text-xs leading-relaxed" style={{ color: "#888888" }}>Set the word count threshold before emitting a transcript chunk.</p>
+        <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "#666666" }}>{t("wizard.paramsTitle")}</p>
+        <p className="text-xs leading-relaxed" style={{ color: "#888888" }}>{t("wizard.paramsDesc")}</p>
         <div className="flex items-center gap-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#888888" }}>EMIT WORD THRESHOLD</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#888888" }}>{t("wizard.threshold")}</p>
           <div className="flex items-center border rounded-sm" style={{ border: "1px solid #333333", background: "#000000" }}>
             <button onClick={() => setThreshold(Math.max(3, threshold - 1))} className="px-2 py-1.5 text-xs hover:bg-[#1a1a1a] transition-colors" style={{ color: "#ffffff" }}>-</button>
             <span className="px-3 py-1.5 text-xs text-center min-w-[40px]" style={{ color: "#ffffff" }}>{threshold}</span>
@@ -95,7 +97,7 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
           style={{ background: mics.length > 0 ? "#ffffff" : "#333333", color: mics.length > 0 ? "#000000" : "#888888", border: "1px solid #ffffff", cursor: mics.length > 0 ? "pointer" : "not-allowed" }}
           onMouseEnter={e => { if (mics.length > 0) { e.currentTarget.style.background = "#cccccc"; e.currentTarget.style.borderColor = "#cccccc"; } }}
           onMouseLeave={e => { if (mics.length > 0) { e.currentTarget.style.background = "#ffffff"; e.currentTarget.style.borderColor = "#ffffff"; } }}>
-          LAUNCH STEFIE
+          {t("wizard.launch")}
         </button>
       </div>
     </div>

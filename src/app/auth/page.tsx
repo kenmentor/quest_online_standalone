@@ -4,10 +4,13 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Globe2, Loader2, Eye, EyeOff } from "lucide-react";
 import { auth } from "../../lib/api";
+import { useI18n } from "../../lib/i18n";
+import UILangSwitcher from "../components/UILangSwitcher";
 
 type Mode = "login" | "signup";
 
 export default function AuthPage() {
+  const { t } = useI18n();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("login");
   const [username, setUsername] = useState("");
@@ -28,7 +31,7 @@ export default function AuthPage() {
       localStorage.setItem("auth_user", JSON.stringify(res.user));
       router.replace("/" + window.location.search);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Something went wrong";
+      const msg = err instanceof Error ? err.message : t("auth.genericError");
       setError(msg);
     } finally {
       setLoading(false);
@@ -37,21 +40,24 @@ export default function AuthPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
+      <div className="absolute top-4 right-4 z-10">
+        <UILangSwitcher />
+      </div>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-white rounded-2xl mb-4">
             <Globe2 className="w-7 h-7 text-black" />
           </div>
-          <h1 className="text-xl font-semibold text-white">Stefie Console</h1>
+          <h1 className="text-xl font-semibold text-white">{t("auth.title")}</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {mode === "login" ? "Sign in to your account" : "Create a new account"}
+            {mode === "login" ? t("auth.taglineLogin") : t("auth.taglineSignup")}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
-            placeholder="Username"
+            placeholder={t("auth.username")}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             className="w-full px-4 py-3 bg-[#1a1a1a] text-white rounded-xl border border-[#333] focus:border-white focus:outline-none text-base placeholder-gray-500"
@@ -63,7 +69,7 @@ export default function AuthPage() {
           <div className="relative">
             <input
               type={showPw ? "text" : "password"}
-              placeholder="Password"
+              placeholder={t("auth.password")}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="w-full px-4 py-3 bg-[#1a1a1a] text-white rounded-xl border border-[#333] focus:border-white focus:outline-none text-base placeholder-gray-500 pr-12"
@@ -89,21 +95,21 @@ export default function AuthPage() {
             className="w-full py-3 bg-white text-black rounded-xl font-medium text-base disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
           >
             {loading && <Loader2 className="w-5 h-5 animate-spin" />}
-            {mode === "login" ? "Sign In" : "Create Account"}
+            {mode === "login" ? t("auth.signIn") : t("auth.createAccount")}
           </button>
         </form>
 
         <p className="text-gray-500 text-sm text-center mt-6">
           {mode === "login" ? (
-            <>Don't have an account?{" "}
+            <>{t("auth.dontHave")}{" "}
               <button onClick={() => { setMode("signup"); setError(""); }} className="text-white hover:underline">
-                Sign up
+                {t("auth.signUp")}
               </button>
             </>
           ) : (
-            <>Already have an account?{" "}
+            <>{t("auth.alreadyHave")}{" "}
               <button onClick={() => { setMode("login"); setError(""); }} className="text-white hover:underline">
-                Sign in
+                {t("auth.signInLink")}
               </button>
             </>
           )}

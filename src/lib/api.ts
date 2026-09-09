@@ -21,7 +21,7 @@ export function getApiBase(): string {
   return '';
 }
 
-function getWsBase(): string {
+export function getWsBase(): string {
   return getApiBase().replace(/^http/, 'ws');
 }
 
