@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, Copy, Check, Link2 } from "lucide-react";
 import ConfigWizard from "./components/ConfigWizard";
 import ConfigPopup from "./components/ConfigPopup";
 import Toast from "./components/Toast";
@@ -84,6 +84,14 @@ function fmtMbps(mbps: number): string {
   return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(mbps * 1000)} Kbps`;
 }
 
+function buildListenLink(room: string | undefined): string {
+  if (typeof window === "undefined") return "";
+  const base = getApiBase();
+  if (!room || !base) return "";
+  const origin = window.location.origin;
+  return `${origin}/meeting/${encodeURIComponent(room)}?s=${encodeURIComponent(base)}`;
+}
+
 type Translate = (key: string, vars?: Record<string, unknown>) => string;
 
 function speedMeta(
@@ -160,6 +168,9 @@ export default function Home() {
   const [addBtnEnabled, setAddBtnEnabled] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
   const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
+  const [copiedTag, setCopiedTag] = useState<string | null>(null);
+
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toastIdRef = useRef(0);
   const feedIdRef = useRef(0);
@@ -281,6 +292,19 @@ export default function Home() {
 
   const selectedInstance = instances.find(i => i.tag === selectedTag) || instances[0];
   const currentTag = viewTag && instances.some(i => i.tag === viewTag) ? viewTag : (instances[0]?.tag ?? null);
+
+  const copyListenLink = useCallback(() => {
+    const inst = selectedInstance;
+    if (!inst?.roomName) { showToast(t("console.noServer"), "error"); return; }
+    const link = buildListenLink(inst.roomName);
+    if (!link) { showToast(t("console.noServer"), "error"); return; }
+    navigator.clipboard?.writeText(link).then(() => {
+      showToast(t("console.listenCopied"), "info");
+      setCopiedTag(inst.tag);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopiedTag(null), 2000);
+    }).catch(() => showToast(t("console.toastCopyFailed"), "error"));
+  }, [selectedInstance, showToast, t]);
 
   const handleEngineAction = useCallback(async () => {
     if (engineState === "IDLE") {
@@ -737,6 +761,27 @@ export default function Home() {
             value={selectedInstance?.roomName ?? "—"}
             onFocus={(e) => e.currentTarget.select()}
           />
+
+          <span className={styles.subLabel}>{t("console.listenLink")}</span>
+          <div style={{ display: "flex", gap: 8, width: "100%" }}>
+            <input
+              className={styles.readonlyInput}
+              readOnly
+              value={buildListenLink(selectedInstance?.roomName)}
+              placeholder={t("console.noServer")}
+              onFocus={(e) => e.currentTarget.select()}
+              style={{ flex: 1, minWidth: 0 }}
+            />
+            <button
+              className={`${styles.themeBtn} ${copiedTag ? styles.langToggleActive : ""}`}
+              onClick={copyListenLink}
+              title={t("console.listenCopy")}
+              aria-label={t("console.listenCopy")}
+              style={{ flexShrink: 0 }}
+            >
+              {copiedTag ? <Check className={styles.themeIcon} /> : <Link2 className={styles.themeIcon} />}
+            </button>
+          </div>
 
           <div className={styles.sidebarSpacer} />
 
