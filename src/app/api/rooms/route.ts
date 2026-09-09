@@ -3,8 +3,8 @@ import { RoomServiceClient } from 'livekit-server-sdk';
 
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'secret';
-const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || 'http://localhost:7880';
-const STEFIE_API_URL = process.env.NEXT_PUBLIC_STEFIE_API_URL || 'https://5a07-102-90-96-92.ngrok-free.app';
+const LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || '';
+const STEFIE_API_URL = process.env.NEXT_PUBLIC_STEFIE_API_URL || '';
 
 export async function GET(request: NextRequest) {
   const prefix = request.nextUrl.searchParams.get('prefix') || '';

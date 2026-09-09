@@ -44,6 +44,8 @@ const BASE_ROOM_LANG: Record<string, { name: string; flag: string }> = {
   italian: { name: "Italian", flag: "🇮🇹" },
 };
 
+const ENV_LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "";
+
 function parseRoomCode(
   roomCode: string,
 ): { base: string; label: string; flag: string } {
@@ -727,11 +729,13 @@ export default function MeetingPage() {
       setConnectionState(ConnectionState.Connecting);
       setError(null);
 
-      if (!livekitConfig || !livekitConfig.serverUrl) {
+      if (!ENV_LIVEKIT_URL && (!livekitConfig || !livekitConfig.serverUrl)) {
         setError(t("meeting.cannotConnect"));
         setConnectionState(ConnectionState.Disconnected);
         return;
       }
+
+      const livekitUrl = ENV_LIVEKIT_URL || livekitConfig!.serverUrl;
 
       try {
         // Create/resume AudioContext during user gesture (iOS requires this)
@@ -746,15 +750,29 @@ export default function MeetingPage() {
           startAudioKeepalive(audioContextRef.current, keepaliveOscRef, keepaliveGainRef);
         }
 
-        // Fetch participant token from the Stefie FastAPI server
-        const response = await fetch(
-          `${livekitConfig.serverBase.replace(/\/+$/, "")}/api/token?${new URLSearchParams({
-            room: roomCode,
-            identity: `${name}_${tabId}`,
-          })}`,
-        );
-        if (!response.ok) throw new Error(t("meeting.failedGetToken"));
-        const { token } = await response.json();
+        // Fetch a token: this app's own LiveKit credentials (env) when available,
+        // otherwise fall back to the Stefie server's /api/token.
+        let token: string;
+        if (ENV_LIVEKIT_URL) {
+          const resp = await fetch(
+            `/api/token?${new URLSearchParams({
+              room: roomCode,
+              identity: `${name}_${tabId}`,
+              name,
+            })}`,
+          );
+          if (!resp.ok) throw new Error(t("meeting.failedGetToken"));
+          token = (await resp.json()).participantToken;
+        } else {
+          const response = await fetch(
+            `${livekitConfig!.serverBase.replace(/\/+$/, "")}/api/token?${new URLSearchParams({
+              room: roomCode,
+              identity: `${name}_${tabId}`,
+            })}`,
+          );
+          if (!response.ok) throw new Error(t("meeting.failedGetToken"));
+          token = (await response.json()).token;
+        }
 
         const { Room } = await import("livekit-client");
         const room = new Room({
@@ -906,7 +924,7 @@ export default function MeetingPage() {
           }
         });
 
-        await room.connect(livekitConfig.serverUrl, token);
+        await room.connect(livekitUrl, token);
         setConnectionState(ConnectionState.Connected);
 
         const initialParticipants = [
