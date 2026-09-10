@@ -16,7 +16,8 @@
   --font-mono: var(--font-jbm), ui-monospace, Consolas, monospace;
   --font-sans: var(--font-syne), "SF Pro Display", system-ui, sans-serif;
 
-  min-height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -105,6 +106,7 @@
   justify-content: center;
   padding: 40px 24px;
   gap: 24px;
+  overflow-y: auto;
 }
 
 .card {
@@ -478,6 +480,7 @@
   flex: 1;
   display: flex;
   min-height: 0;
+  overflow: hidden;
 }
 
 .sidebarLeft,
@@ -634,11 +637,12 @@
 .centerPane {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 32px 40px;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .consoleTitle {
@@ -889,6 +893,36 @@
   border-color: var(--color-status-active);
 }
 
+.roomPeopleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.roomPeopleCount {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--color-feed-target);
+}
+
+.peopleDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+  flex: none;
+}
+
+.peopleDotLive {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.8);
+  animation: pulse 2s ease-in-out infinite;
+}
+
 /* ---------------------------------------------------------------------------
    Responsive — tablet & mobile breakpoints
 --------------------------------------------------------------------------- */
@@ -910,10 +944,11 @@
   }
 }
 
-/* Mobile: stack panes vertically */
+/* Mobile: stack panes vertically, whole stack scrolls internally */
 @media (max-width: 768px) {
   .panes {
     flex-direction: column;
+    overflow-y: auto;
   }
 
   .sidebarLeft,
@@ -921,7 +956,6 @@
     width: 100%;
     border-right: none;
     border-left: none;
-    max-height: 40vh;
     padding: 16px;
     gap: 10px;
   }
@@ -937,6 +971,7 @@
   .centerPane {
     padding: 16px;
     gap: 14px;
+    min-height: 60vh;
   }
 
   .header {
@@ -999,7 +1034,6 @@
   .sidebarLeft,
   .sidebarRight {
     padding: 12px;
-    max-height: 35vh;
   }
 
   .centerPane {

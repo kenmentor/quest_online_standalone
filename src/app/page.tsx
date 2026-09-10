@@ -703,6 +703,14 @@ export default function Home() {
 
           <div className={styles.sidebarSpacer} />
 
+          <div className={styles.roomPeopleRow}>
+            <span className={styles.subLabel}>{t("console.roomPeople")}</span>
+            <span className={styles.roomPeopleCount}>
+              <span className={`${styles.peopleDot} ${(selectedInstance?.clients ?? 0) > 0 ? styles.peopleDotLive : ""}`} />
+              {selectedInstance?.clients ?? 0}
+            </span>
+          </div>
+
           <span className={styles.sectionTitle}>{t("console.systemLogs")}</span>
           <LogViewer logs={logs} />
         </aside>
