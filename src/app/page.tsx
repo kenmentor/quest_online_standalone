@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, Copy, Check, Link2 } from "lucide-react";
+import { Sun, Moon, Copy, Check, Link2, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import ConfigWizard from "./components/ConfigWizard";
 import ConfigPopup from "./components/ConfigPopup";
@@ -459,6 +459,19 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTag, showToast, addLog, t]);
 
+  const removeInstance = useCallback(async (tag: string) => {
+    const inst = instances.find(i => i.tag === tag);
+    setInstances(prev => prev.filter(i => i.tag !== tag));
+    try {
+      await api.removeEngine(tag);
+      showToast(t("console.toastRemovedEngine", { name: inst?.name || tag }), "info");
+      addLog(`[INFO] Removed engine: ${inst?.name || tag} (${tag})`);
+    } catch (e: unknown) {
+      showToast(t("console.toastRemoveEngineFailed", { msg: errMsg(e) }), "error");
+      if (inst) setInstances(prev => [...prev, inst]);
+    }
+  }, [instances, showToast, addLog, t]);
+
   // Restore engines from server on console load
   useEffect(() => {
     if (phase !== "console" || !authed) return;
@@ -683,19 +696,28 @@ export default function Home() {
 
           <div className={styles.instanceList}>
             {instances.map((inst, idx) => (
-              <button
-                key={inst.tag}
-                className={`${styles.instanceItem} ${inst.tag === (selectedTag ?? instances[0]?.tag) ? styles.instanceItemActive : ""}`}
-                onClick={() => setSelectedTag(inst.tag)}
-              >
-                {`Instance ${String(idx + 1).padStart(2, "0")} (EN - ${inst.name})`}
-              </button>
+              <div key={inst.tag} className={styles.instanceRow}>
+                <button
+                  className={`${styles.instanceItem} ${inst.tag === (selectedTag ?? instances[0]?.tag) ? styles.instanceItemActive : ""}`}
+                  onClick={() => setSelectedTag(inst.tag)}
+                >
+                  {`Instance ${String(idx + 1).padStart(2, "0")} (EN - ${inst.name})`}
+                </button>
+                <button
+                  className={styles.instanceDeleteBtn}
+                  onClick={(e) => { e.stopPropagation(); removeInstance(inst.tag); }}
+                  title={t("console.removeInstance") || "Remove"}
+                  aria-label={t("console.removeInstance") || "Remove"}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             ))}
           </div>
 
           <button
             className={styles.addBtn}
-            disabled={isConnected || isConnecting || !addBtnEnabled}
+            disabled={isConnecting || !addBtnEnabled}
             onClick={() => setShowConfigPopup(true)}
           >
             {t("console.newInstance")}

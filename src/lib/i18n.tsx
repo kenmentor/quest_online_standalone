@@ -97,6 +97,9 @@ Object.assign(dict.en, {
   "console.toastPauseFailed": "ERROR: Failed to pause: {msg}",
   "console.toastAlreadyActive": "ERROR: Instance for '{name}' is already active.",
   "console.toastAddEngineFailed": "ERROR: Failed to add engine: {msg}",
+  "console.toastRemovedEngine": "Removed engine: {name}",
+  "console.toastRemoveEngineFailed": "ERROR: Failed to remove engine: {msg}",
+  "console.removeInstance": "Remove instance",
 
   "console.engineConsole": "ENGINE CONSOLE",
   "console.badgeDisconnected": "STATUS: DISCONNECTED",
@@ -240,6 +243,9 @@ Object.assign(dict.de, {
   "console.toastPauseFailed": "FEHLER: Pause fehlgeschlagen: {msg}",
   "console.toastAlreadyActive": "FEHLER: Instanz für '{name}' ist bereits aktiv.",
   "console.toastAddEngineFailed": "FEHLER: Engine konnte nicht hinzugefügt werden: {msg}",
+  "console.toastRemovedEngine": "Engine entfernt: {name}",
+  "console.toastRemoveEngineFailed": "FEHLER: Engine konnte nicht entfernt werden: {msg}",
+  "console.removeInstance": "Instanz entfernen",
 
   "console.engineConsole": "ENGINE-KONSOLE",
   "console.badgeDisconnected": "STATUS: GETRENNT",
@@ -383,6 +389,9 @@ Object.assign(dict.es, {
   "console.toastPauseFailed": "ERROR: Fallo al pausar: {msg}",
   "console.toastAlreadyActive": "ERROR: La instancia de '{name}' ya está activa.",
   "console.toastAddEngineFailed": "ERROR: No se pudo añadir el motor: {msg}",
+  "console.toastRemovedEngine": "Motor eliminado: {name}",
+  "console.toastRemoveEngineFailed": "ERROR: No se pudo eliminar el motor: {msg}",
+  "console.removeInstance": "Eliminar instancia",
 
   "console.engineConsole": "CONSOLA DEL MOTOR",
   "console.badgeDisconnected": "ESTADO: DESCONECTADO",
@@ -526,6 +535,9 @@ Object.assign(dict.fr, {
   "console.toastPauseFailed": "ERREUR : échec de la pause : {msg}",
   "console.toastAlreadyActive": "ERREUR : l'instance de '{name}' est déjà active.",
   "console.toastAddEngineFailed": "ERREUR : impossible d'ajouter le moteur : {msg}",
+  "console.toastRemovedEngine": "Moteur retiré : {name}",
+  "console.toastRemoveEngineFailed": "ERREUR : impossible de retirer le moteur : {msg}",
+  "console.removeInstance": "Retirer l'instance",
 
   "console.engineConsole": "CONSOLE DU MOTEUR",
   "console.badgeDisconnected": "STATUT : DÉCONNECTÉ",
@@ -669,6 +681,9 @@ Object.assign(dict.it, {
   "console.toastPauseFailed": "ERRORE: pausa fallita: {msg}",
   "console.toastAlreadyActive": "ERRORE: l'istanza di '{name}' è già attiva.",
   "console.toastAddEngineFailed": "ERRORE: impossibile aggiungere il motore: {msg}",
+  "console.toastRemovedEngine": "Motore rimosso: {name}",
+  "console.toastRemoveEngineFailed": "ERRORE: impossibile rimuovere il motore: {msg}",
+  "console.removeInstance": "Rimuovi istanza",
 
   "console.engineConsole": "CONSOLE DEL MOTORE",
   "console.badgeDisconnected": "STATO: DISCONNESSO",
