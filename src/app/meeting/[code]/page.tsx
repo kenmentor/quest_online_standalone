@@ -620,9 +620,9 @@ export default function MeetingPage() {
 
     const base = resolveServer();
 
-    // With a LiveKit URL from env this app is fully self-sufficient —
-    // no need to call the Stefie server at all.
-    if (ENV_LIVEKIT_URL || !base) {
+    // With a server URL the listener follows the operator server exactly —
+    // the same LiveKit URL, keys and room the console monitor uses.
+    if (!base) {
       if (cancelled) return;
       setLivekitConfig(null);
       setIsConfigLoading(false);
@@ -735,13 +735,12 @@ export default function MeetingPage() {
       setConnectionState(ConnectionState.Connecting);
       setError(null);
 
-      if (!ENV_LIVEKIT_URL && (!livekitConfig || !livekitConfig.serverUrl)) {
+      const livekitUrl = livekitConfig?.serverUrl || ENV_LIVEKIT_URL;
+      if (!livekitUrl) {
         setError(t("meeting.cannotConnect"));
         setConnectionState(ConnectionState.Disconnected);
         return;
       }
-
-      const livekitUrl = ENV_LIVEKIT_URL || livekitConfig!.serverUrl;
 
       try {
         // Create/resume AudioContext during user gesture (iOS requires this)
@@ -759,7 +758,17 @@ export default function MeetingPage() {
         // Fetch a token: this app's own LiveKit credentials (env) when available,
         // otherwise fall back to the Stefie server's /api/token.
         let token: string;
-        if (ENV_LIVEKIT_URL) {
+        if (livekitConfig?.serverBase && livekitConfig.serverUrl) {
+          const response = await fetch(
+            `${livekitConfig.serverBase.replace(/\/+$/, "")}/api/token?${new URLSearchParams({
+              room: roomCode,
+              identity: `${name}_${tabId}`,
+            })}`,
+            { headers: { "ngrok-skip-browser-warning": "true" } },
+          );
+          if (!response.ok) throw new Error(t("meeting.failedGetToken"));
+          token = (await response.json()).token;
+        } else if (ENV_LIVEKIT_URL) {
           const resp = await fetch(
             `/api/token?${new URLSearchParams({
               room: roomCode,
@@ -770,15 +779,7 @@ export default function MeetingPage() {
           if (!resp.ok) throw new Error(t("meeting.failedGetToken"));
           token = (await resp.json()).participantToken;
         } else {
-          const response = await fetch(
-            `${livekitConfig!.serverBase.replace(/\/+$/, "")}/api/token?${new URLSearchParams({
-              room: roomCode,
-              identity: `${name}_${tabId}`,
-            })}`,
-            { headers: { "ngrok-skip-browser-warning": "true" } },
-          );
-          if (!response.ok) throw new Error(t("meeting.failedGetToken"));
-          token = (await response.json()).token;
+          throw new Error(t("meeting.cannotConnect"));
         }
 
         const { Room } = await import("livekit-client");
