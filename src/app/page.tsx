@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sun, Moon, Copy, Check, Link2, Trash2 } from "lucide-react";
+import { Room, RoomEvent, Track, RemoteTrack, ConnectionState } from "livekit-client";
+import { Sun, Moon, Copy, Check, Link2, Trash2, Volume2, VolumeX } from "lucide-react";
 import { motion } from "framer-motion";
 import ConfigWizard from "./components/ConfigWizard";
 import ConfigPopup from "./components/ConfigPopup";
@@ -175,8 +176,11 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const [monitorEnabled, setMonitorEnabled] = useState(false);
 
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const monitorRoomRef = useRef<Room | null>(null);
+  const monitorAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const toastIdRef = useRef(0);
   const feedIdRef = useRef(0);
@@ -299,6 +303,66 @@ export default function Home() {
 
   const selectedInstance = instances.find(i => i.tag === selectedTag) || instances[0];
   const currentTag = viewTag && instances.some(i => i.tag === viewTag) ? viewTag : (instances[0]?.tag ?? null);
+
+  // Audio monitor — joins the selected engine's LiveKit room in subscribe-only mode
+  useEffect(() => {
+    if (!monitorEnabled || !authed || phase !== "console" || !selectedInstance?.roomName) {
+      return;
+    }
+    const roomName = selectedInstance.roomName;
+    const baseUrl = getApiBase();
+    if (!baseUrl) return;
+
+    let cancelled = false;
+    let room: Room | null = null;
+
+    (async () => {
+      try {
+        const tokenRes = await fetch(
+          `${baseUrl.replace(/\/+$/, "")}/api/token?room=${encodeURIComponent(roomName)}&identity=monitor-${Date.now()}`,
+          { headers: { "ngrok-skip-browser-warning": "true" } },
+        );
+        if (!cancelled && !tokenRes.ok) return;
+        const { token, livekit_url } = await tokenRes.json();
+        if (cancelled || !livekit_url || !token) return;
+
+        room = new Room({ adaptiveStream: true, dynacast: true });
+        monitorRoomRef.current = room;
+
+        room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
+          if (track.kind === Track.Kind.Audio) {
+            const el = track.attach();
+            el.autoplay = true;
+            monitorAudioRef.current = el;
+            document.body.appendChild(el);
+          }
+        });
+
+        room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack) => {
+          if (track.kind === Track.Kind.Audio) {
+            track.detach().forEach(el => {
+              el.remove();
+              if (monitorAudioRef.current === el) monitorAudioRef.current = null;
+            });
+          }
+        });
+
+        await room.connect(livekit_url, token);
+        if (cancelled) { await room.disconnect(); return; }
+        addLog(`[INFO] Audio monitor joined: ${roomName}`);
+      } catch (e: unknown) {
+        addLog(`[WARN] Audio monitor failed: ${errMsg(e)}`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      monitorAudioRef.current?.remove();
+      monitorAudioRef.current = null;
+      monitorRoomRef.current?.disconnect().catch(() => {});
+      monitorRoomRef.current = null;
+    };
+  }, [monitorEnabled, authed, phase, selectedInstance?.roomName, addLog]);
 
   const copyListenLink = useCallback(() => {
     const inst = selectedInstance;
@@ -721,6 +785,14 @@ export default function Home() {
             onClick={() => setShowConfigPopup(true)}
           >
             {t("console.newInstance")}
+          </button>
+
+          <button
+            className={`${styles.addBtn} ${monitorEnabled ? styles.monitorActive : ""}`}
+            onClick={() => setMonitorEnabled(v => !v)}
+          >
+            {monitorEnabled ? <Volume2 size={14} style={{ marginRight: 6 }} /> : <VolumeX size={14} style={{ marginRight: 6 }} />}
+            {monitorEnabled ? t("console.monitorOff") : t("console.monitorOn")}
           </button>
 
           <div className={styles.sidebarSpacer} />

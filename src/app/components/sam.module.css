@@ -662,6 +662,13 @@
   cursor: not-allowed;
 }
 
+.monitorActive {
+  border-color: #22c55e;
+  color: #22c55e;
+  display: flex;
+  align-items: center;
+}
+
 .sidebarSpacer {
   flex: 1;
 }
