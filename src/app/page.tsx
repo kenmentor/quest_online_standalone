@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sun, Moon, Copy, Check, Link2 } from "lucide-react";
+import { motion } from "framer-motion";
 import ConfigWizard from "./components/ConfigWizard";
 import ConfigPopup from "./components/ConfigPopup";
 import Toast from "./components/Toast";
@@ -58,7 +59,12 @@ function FeedRow({ item, tag }: { item: FeedItem; tag: string }) {
   const { t } = useI18n();
   const translated = item.targets[tag];
   return (
-    <div className={styles.feedItem}>
+    <motion.div
+      className={styles.feedItem}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25, ease: "easeOut" }}
+    >
       <div className={styles.feedBlock}>
         <span className={styles.feedTag}>{t("console.sourceLabel")}</span>
         <span className={styles.feedSource}>{`"${item.source}"`}</span>
@@ -71,7 +77,7 @@ function FeedRow({ item, tag }: { item: FeedItem; tag: string }) {
           <span className={styles.feedTranslating}>{t("console.translating")}</span>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -175,6 +181,7 @@ export default function Home() {
   const toastIdRef = useRef(0);
   const feedIdRef = useRef(0);
   const feedScrollRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
   const wsTranscriptsRef = useRef<WebSocket | null>(null);
   const wsLogsRef = useRef<WebSocket | null>(null);
   const audioWsRef = useRef<WebSocket | null>(null);
@@ -498,13 +505,17 @@ export default function Home() {
         (tag, source, translated) => {
           if (cancelled) return;
           addLog(`[→ ${tag}] ${translated}`);
-          setFeed(p =>
-            p.map(item =>
-              item.source === source && !(tag in item.targets)
-                ? { ...item, targets: { ...item.targets, [tag]: translated } }
-                : item,
-            ),
-          );
+          setFeed(p => {
+            for (let i = p.length - 1; i >= 0; i--) {
+              const item = p[i];
+              if (item.source === source && !(tag in item.targets)) {
+                const next = p.slice();
+                next[i] = { ...item, targets: { ...item.targets, [tag]: translated } };
+                return next;
+              }
+            }
+            return p;
+          });
         },
       );
       wsTranscriptsRef.current = ws;
@@ -569,11 +580,22 @@ export default function Home() {
     return () => { cancelled = true; clearInterval(i); };
   }, [phase, authed, t]);
 
-  // Auto-scroll transcript feed to the latest item
+  // Stable auto-scroll — only follow when the user is already at the bottom,
+  // so reading/history scrolling isn't yanked around by new updates
+  const handleFeedScroll = useCallback(() => {
+    const el = feedScrollRef.current;
+    if (!el) return;
+    nearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+  }, []);
+
   useEffect(() => {
-    if (feedScrollRef.current) {
-      feedScrollRef.current.scrollTop = feedScrollRef.current.scrollHeight;
-    }
+    const el = feedScrollRef.current;
+    if (!el || !nearBottomRef.current) return;
+    const raf = requestAnimationFrame(() => {
+      if (!nearBottomRef.current) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [feed]);
 
   // Internet speed measurement (Cloudflare, mirrors SpeedWorker)
@@ -715,7 +737,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={styles.transcriptScroll} ref={feedScrollRef}>
+          <div className={styles.transcriptScroll} ref={feedScrollRef} onScroll={handleFeedScroll}>
             {feed.length === 0 ? (
               <div className={styles.feedEmpty}>{t("console.waitingSpeech")}</div>
             ) : (
