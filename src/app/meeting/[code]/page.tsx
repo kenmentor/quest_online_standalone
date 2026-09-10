@@ -755,8 +755,8 @@ export default function MeetingPage() {
           startAudioKeepalive(audioContextRef.current, keepaliveOscRef, keepaliveGainRef);
         }
 
-        // Fetch a token: this app's own LiveKit credentials (env) when available,
-        // otherwise fall back to the Stefie server's /api/token.
+        // Fetch a token: the operator server first (same LiveKit project, keys
+        // and room as the console monitor), else this app's own env credentials.
         let token: string;
         if (livekitConfig?.serverBase && livekitConfig.serverUrl) {
           const response = await fetch(
