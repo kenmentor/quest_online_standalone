@@ -813,7 +813,7 @@ export default function Home() {
             className={`${styles.addBtn} ${monitorEnabled ? styles.monitorActive : ""}`}
             onClick={() => setMonitorEnabled(v => !v)}
           >
-            {monitorEnabled ? <Volume2 size={14} style={{ marginRight: 6 }} /> : <VolumeX size={14} style={{ marginRight: 6 }} />}
+            {monitorEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
             {monitorEnabled ? t("console.monitorOff") : t("console.monitorOn")}
           </button>
 

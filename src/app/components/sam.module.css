@@ -636,6 +636,10 @@
 }
 
 .addBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   background: transparent;
   color: var(--color-text-primary);
   border: 1px solid var(--color-border);
@@ -665,8 +669,6 @@
 .monitorActive {
   border-color: #22c55e;
   color: #22c55e;
-  display: flex;
-  align-items: center;
 }
 
 .sidebarSpacer {
