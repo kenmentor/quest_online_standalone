@@ -166,7 +166,7 @@ export default function Home() {
     if (saved) try { return JSON.parse(saved); } catch {}
     return null;
   });
-  const [instances, setInstances] = useState<{ tag: string; name: string; modelName: string; clients: number; roomName?: string }[]>([]);
+  const [instances, setInstances] = useState<{ tag: string; name: string; modelName: string; clients: number; roomName?: string; running?: boolean; connected?: boolean }[]>([]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [viewTag, setViewTag] = useState<string | null>(null);
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -177,6 +177,7 @@ export default function Home() {
   const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
   const [monitorEnabled, setMonitorEnabled] = useState(false);
+  const [roomIdentities, setRoomIdentities] = useState<Record<string, string[]>>({});
 
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const monitorRoomRef = useRef<Room | null>(null);
@@ -315,11 +316,12 @@ export default function Home() {
 
     let cancelled = false;
     let room: Room | null = null;
+    const identity = `monitor-${Date.now()}`;
 
     (async () => {
       try {
         const tokenRes = await fetch(
-          `${baseUrl.replace(/\/+$/, "")}/api/token?room=${encodeURIComponent(roomName)}&identity=monitor-${Date.now()}`,
+          `${baseUrl.replace(/\/+$/, "")}/api/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`,
           { headers: { "ngrok-skip-browser-warning": "true" } },
         );
         if (!cancelled && !tokenRes.ok) return;
@@ -349,7 +351,7 @@ export default function Home() {
 
         await room.connect(livekit_url, token);
         if (cancelled) { await room.disconnect(); return; }
-        addLog(`[INFO] Audio monitor joined: ${roomName}`);
+        addLog(`[LIVEKIT] monitor joined -> room=${roomName} identity=${identity} url=${livekit_url}`);
       } catch (e: unknown) {
         addLog(`[WARN] Audio monitor failed: ${errMsg(e)}`);
       }
@@ -645,11 +647,18 @@ export default function Home() {
         if (cancelled || document.hidden) return;
         setInstances(prev => prev.map(inst => {
           const serverInst = status.engines.find((e: { tag: string }) => e.tag === inst.tag);
-          return { ...inst, clients: serverInst?.clients ?? 0, roomName: serverInst?.room_name ?? inst.roomName };
+          return { ...inst, clients: serverInst?.clients ?? 0, roomName: serverInst?.room_name ?? inst.roomName, running: serverInst?.running ?? inst.running, connected: serverInst?.connected ?? inst.connected };
         }));
         if (status.state === "RECORDING" && engineStateRef.current !== "RECORDING" && engineStateRef.current !== "INIT" && engineStateRef.current !== "PAUSED") {
           setEngineState("RECORDING");
         }
+        try {
+          const replay = await api.getLiveReplay();
+          if (cancelled || document.hidden) return;
+          const map: Record<string, string[]> = {};
+          for (const r of replay) map[r.tag] = r.identities ?? [];
+          setRoomIdentities(prev => ({ ...prev, ...map }));
+        } catch {}
       } catch {}
     };
     poll();
@@ -802,6 +811,21 @@ export default function Home() {
             <span className={styles.roomPeopleCount}>
               <span className={`${styles.peopleDot} ${(selectedInstance?.clients ?? 0) > 0 ? styles.peopleDotLive : ""}`} />
               {selectedInstance?.clients ?? 0}
+            </span>
+          </div>
+
+          <div className={styles.inRoomRow}>
+            <span className={styles.subLabel}>{t("console.inRoom")}</span>
+            <span className={styles.inRoomList}>
+              {(roomIdentities[selectedInstance?.tag ?? ""] ?? []).slice(0, 4).join(", ") || t("console.roomEmpty")}
+            </span>
+          </div>
+
+          <div className={styles.roomPeopleRow}>
+            <span className={styles.subLabel}>{t("console.broadcastState")}</span>
+            <span className={styles.roomPeopleCount}>
+              <span className={`${styles.peopleDot} ${selectedInstance?.running && selectedInstance?.connected ? styles.peopleDotLive : ""}`} />
+              {selectedInstance?.running && selectedInstance?.connected ? t("console.broadcastLive") : (selectedInstance?.running ? t("console.broadcastConnecting") : t("console.broadcastOff"))}
             </span>
           </div>
 

@@ -49,12 +49,22 @@ export interface EngineInfo {
   room_name: string;
   clients: number;
   running: boolean;
+  connected?: boolean;
 }
 
 export interface SystemStatus {
   state: string;
   engines: EngineInfo[];
   total_clients: number;
+}
+
+export interface ReplayEntry {
+  tag: string;
+  name: string;
+  room_name: string;
+  connected: boolean;
+  clients: number;
+  identities: string[];
 }
 
 export interface AddEngineBody {
@@ -121,6 +131,8 @@ export const api = {
   removeEngine: (tag: string) => authReq<{ status: string }>('DELETE', `/api/engines/${tag}`),
 
   getStatus: () => authReq<SystemStatus>('GET', '/api/status'),
+
+  getLiveReplay: () => authReq<ReplayEntry[]>('GET', '/api/rooms/debug'),
 
   startListening: () => authReq<{ status: string; state: string }>('POST', '/api/listen/start'),
 

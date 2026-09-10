@@ -939,6 +939,25 @@
   gap: 8px;
 }
 
+.inRoomRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.inRoomList {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-secondary);
+  word-break: break-all;
+  text-align: right;
+  max-height: 3.2em;
+  overflow: hidden;
+  line-height: 1.45;
+}
+
 .roomPeopleCount {
   display: flex;
   align-items: center;
