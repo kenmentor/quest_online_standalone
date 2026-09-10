@@ -46,7 +46,7 @@ export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
-      <div className="w-[440px] rounded-sm shadow-xl animate-slide-up p-4 space-y-2.5" style={{ background: "var(--color-bg-app)", border: "1px solid var(--color-border)" }} onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-[440px] mx-4 rounded-sm shadow-xl animate-slide-up p-4 space-y-2.5" style={{ background: "var(--color-bg-app)", border: "1px solid var(--color-border)" }} onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "var(--color-text-muted)" }}>{t("popup.title")}</p>
           <button onClick={onClose} className="p-1 rounded transition-colors hover:bg-[#1a1a1a]" style={{ color: "var(--color-text-secondary)" }}><X className="w-4 h-4" /></button>

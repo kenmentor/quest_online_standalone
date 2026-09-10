@@ -30,7 +30,7 @@ export default function Toast({ message, level = "error", onClose }: ToastProps)
   }, [onClose]);
 
   return (
-    <div ref={ref} className="fixed bottom-6 right-6 z-50 px-5 py-3 rounded-md shadow-lg" style={{ background: level === "error" ? "#ef4444" : "#3b82f6", color: "#ffffff" }}>
+    <div ref={ref} className="fixed bottom-4 right-4 left-4 sm:bottom-6 sm:right-6 sm:left-auto z-50 px-5 py-3 rounded-md shadow-lg" style={{ background: level === "error" ? "#ef4444" : "#3b82f6", color: "#ffffff" }}>
       <p className="text-xs font-bold">{message}</p>
     </div>
   );

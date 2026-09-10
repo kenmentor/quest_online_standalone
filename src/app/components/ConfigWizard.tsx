@@ -55,7 +55,7 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
 
   return (
     <div className="fixed inset-0 overflow-y-auto" style={{ background: "#030303" }}>
-      <div className="max-w-2xl mx-auto p-6 space-y-6">
+      <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
         <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "#666666" }}>{t("wizard.micTitle")}</p>
         <p className="text-xs leading-relaxed" style={{ color: "#888888" }}>{t("wizard.micDesc")}</p>
         <div className="space-y-0.5 max-h-[160px] overflow-y-auto scrollbar-thin">

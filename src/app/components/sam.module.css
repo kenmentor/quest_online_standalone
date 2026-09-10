@@ -888,3 +888,152 @@
   color: var(--color-status-active);
   border-color: var(--color-status-active);
 }
+
+/* ---------------------------------------------------------------------------
+   Responsive — tablet & mobile breakpoints
+--------------------------------------------------------------------------- */
+
+/* Tablet: narrower sidebars, reduced padding */
+@media (max-width: 1024px) {
+  .sidebarLeft,
+  .sidebarRight {
+    width: 240px;
+    padding: 20px;
+  }
+
+  .centerPane {
+    padding: 24px 28px;
+  }
+
+  .roomGrid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+}
+
+/* Mobile: stack panes vertically */
+@media (max-width: 768px) {
+  .panes {
+    flex-direction: column;
+  }
+
+  .sidebarLeft,
+  .sidebarRight {
+    width: 100%;
+    border-right: none;
+    border-left: none;
+    max-height: 40vh;
+    padding: 16px;
+    gap: 10px;
+  }
+
+  .sidebarLeft {
+    border-bottom: 1px solid var(--color-border-sidebar);
+  }
+
+  .sidebarRight {
+    border-top: 1px solid var(--color-border-sidebar);
+  }
+
+  .centerPane {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .header {
+    padding: 14px 16px;
+  }
+
+  .feedItem {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .paneHeaderRow {
+    flex-wrap: wrap;
+  }
+
+  .feedHeaderRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .langToggles {
+    flex-wrap: wrap;
+  }
+
+  .roomGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .logViewer {
+    height: 150px;
+  }
+
+  .transcriptViewer {
+    max-height: 150px;
+  }
+
+  .infoRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .speedRow {
+    flex-wrap: wrap;
+  }
+
+  .consoleTitle {
+    font-size: 13px;
+  }
+
+  .actionBtn {
+    padding: 14px;
+    font-size: 12px;
+  }
+}
+
+/* Small mobile: tighter spacing */
+@media (max-width: 480px) {
+  .sidebarLeft,
+  .sidebarRight {
+    padding: 12px;
+    max-height: 35vh;
+  }
+
+  .centerPane {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .header {
+    padding: 12px;
+  }
+
+  .badge {
+    font-size: 9px;
+    padding: 4px 8px;
+  }
+
+  .feedSource {
+    font-size: 12px;
+  }
+
+  .feedTarget {
+    font-size: 13px;
+  }
+
+  .feedTranslating {
+    font-size: 13px;
+  }
+
+  .roomCard {
+    padding: 10px 12px;
+  }
+
+  .logViewer {
+    height: 120px;
+    font-size: 10px;
+  }
+}
