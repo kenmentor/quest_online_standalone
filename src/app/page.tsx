@@ -9,7 +9,7 @@ import ConfigWizard from "./components/ConfigWizard";
 import ConfigPopup from "./components/ConfigPopup";
 import Toast from "./components/Toast";
 import UILangSwitcher from "./components/UILangSwitcher";
-import { api, auth as authApi, connectTranscripts, connectLogs, getApiBase, getWsBase } from "../lib/api";
+import { api, auth as authApi, connectTranscripts, connectLogs, getApiBase } from "../lib/api";
 import { useI18n } from "../lib/i18n";
 import styles from "./components/sam.module.css";
 
@@ -176,6 +176,7 @@ export default function Home() {
   const [logs, setLogs] = useState<string[]>([]);
   const [toasts, setToasts] = useState<{ id: number; message: string; level: "info" | "error" }[]>([]);
   const [copiedTag, setCopiedTag] = useState<string | null>(null);
+  const [copiedList, setCopiedList] = useState(false);
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [roomIdentities, setRoomIdentities] = useState<Record<string, string[]>>({});
 
@@ -233,9 +234,10 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  // Theme (dark = default, mirrors sam-v2-livekit-cloud toggle)
+  // Theme (dark = default palette, .light overrides the CSS variables)
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
+    document.documentElement.classList.toggle("light", !dark);
     try {
       localStorage.setItem("stefie_theme", dark ? "dark" : "light");
     } catch {}
@@ -378,6 +380,17 @@ export default function Home() {
       copyTimeoutRef.current = setTimeout(() => setCopiedTag(null), 2000);
     }).catch(() => showToast(t("console.toastCopyFailed"), "error"));
   }, [selectedInstance, showToast, t]);
+
+  const copyInRoomList = useCallback(() => {
+    const ids = roomIdentities[selectedInstance?.tag ?? ""] ?? [];
+    if (ids.length === 0) { showToast(t("console.roomEmpty"), "error"); return; }
+    navigator.clipboard?.writeText(ids.join("\n")).then(() => {
+      showToast(t("console.inRoomCopied"), "info");
+      setCopiedList(true);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopiedList(false), 2000);
+    }).catch(() => showToast(t("console.toastCopyFailed"), "error"));
+  }, [roomIdentities, selectedInstance?.tag, showToast, t]);
 
   const handleEngineAction = useCallback(async () => {
     if (engineState === "IDLE") {
@@ -814,11 +827,24 @@ export default function Home() {
             </span>
           </div>
 
-          <div className={styles.inRoomRow}>
-            <span className={styles.subLabel}>{t("console.inRoom")}</span>
-            <span className={styles.inRoomList}>
-              {(roomIdentities[selectedInstance?.tag ?? ""] ?? []).slice(0, 4).join(", ") || t("console.roomEmpty")}
-            </span>
+          <div className={styles.inRoomBoxRow}>
+            <textarea
+              className={styles.inRoomBox}
+              readOnly
+              value={(roomIdentities[selectedInstance?.tag ?? ""] ?? []).join("\n") || t("console.roomEmpty")}
+              onFocus={(e) => e.currentTarget.select()}
+              spellCheck={false}
+              aria-label={t("console.inRoom")}
+            />
+            <button
+              className={styles.themeBtn}
+              onClick={copyInRoomList}
+              title={t("console.inRoomCopy")}
+              aria-label={t("console.inRoomCopy")}
+              style={{ flexShrink: 0, alignSelf: "flex-start" }}
+            >
+              {copiedList ? <Check className={styles.themeIcon} /> : <Copy className={styles.themeIcon} />}
+            </button>
           </div>
 
           <div className={styles.roomPeopleRow}>
@@ -886,21 +912,7 @@ export default function Home() {
             <span className={styles.valueText}>{t("console.thresholdWords", { n: micConfig?.threshold ?? 10 })}</span>
           </div>
 
-          <span className={styles.subLabel}>{t("console.frontendUrl")}</span>
-          <input
-            className={styles.readonlyInput}
-            readOnly
-            value={getApiBase() || "—"}
-            onFocus={(e) => e.currentTarget.select()}
-          />
-
-          <span className={styles.subLabel}>{t("console.websocketUrl")}</span>
-          <input
-            className={styles.readonlyInput}
-            readOnly
-            value={getWsBase() || "—"}
-            onFocus={(e) => e.currentTarget.select()}
-          />
+          <span className={styles.sectionTitle}>{t("console.roomInfo")}</span>
 
           <span className={styles.subLabel}>{t("console.roomName")}</span>
           <input
