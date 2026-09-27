@@ -184,6 +184,7 @@ export default function Home() {
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [roomIdentities, setRoomIdentities] = useState<Record<string, string[]>>({});
   const [instanceLimit, setInstanceLimit] = useState(8);
+  const [tagSince, setTagSince] = useState<Record<string, number>>({});
   const currentTagRef = useRef<string | null>(null);
 
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -541,8 +542,12 @@ export default function Home() {
       });
       showToast(t("console.toastAddedEngine", { name, tag }), "info");
       addLog(`[INFO] Added engine: ${name} (${tag})`);
-      setFeed([]);
-      setRoomIdentities({});
+      setTagSince(prev => ({ ...prev, [tag]: Date.now() }));
+      setRoomIdentities(prev => {
+        const next = { ...prev };
+        delete next[tag];
+        return next;
+      });
       if (!selectedTag) { setSelectedTag(tag); }
     } catch (e: unknown) {
       const status = (e as { status?: number })?.status;
@@ -955,11 +960,16 @@ export default function Home() {
           </div>
 
           <div className={styles.transcriptScroll} ref={feedScrollRef} onScroll={handleFeedScroll}>
-            {feed.length === 0 ? (
-              <div className={styles.feedEmpty}>{t("console.waitingSpeech")}</div>
-            ) : (
-              currentTag && feed.map(item => <FeedRow key={item.id} item={item} tag={currentTag} />)
-            )}
+            {(() => {
+              const visibleFeed = currentTag && tagSince[currentTag]
+                ? feed.filter(item => item.ts >= tagSince[currentTag])
+                : feed;
+              return visibleFeed.length === 0 ? (
+                <div className={styles.feedEmpty}>{t("console.waitingSpeech")}</div>
+              ) : (
+                currentTag && visibleFeed.map(item => <FeedRow key={item.id} item={item} tag={currentTag} />)
+              );
+            })()}
           </div>
         </main>
 
