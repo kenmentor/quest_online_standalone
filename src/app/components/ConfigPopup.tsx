@@ -5,20 +5,25 @@ import { X } from "lucide-react";
 import { api, LanguageInfo } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 
-const LANG_TAG: Record<string, string> = { German: "de", French: "fr", Spanish: "es", Italian: "it" };
+const LANG_TAG: Record<string, string> = { German: "de", French: "fr", Spanish: "es", Italian: "it", Swahili: "sw" };
 
 function tagFor(language: string): string {
-  return LANG_TAG[language] || language.toLowerCase().slice(0, 2);
+  const mapped = LANG_TAG[language];
+  if (mapped) return mapped;
+  if (language.toLowerCase() === "swahili") return "sw";
+  return language.toLowerCase().replace(/[^a-z]/g, "").slice(0, 2);
 }
 
 interface ConfigPopupProps {
   onClose: () => void;
   onSave: (tag: string, name: string, modelName: string, modelPath: string, modelJsonPath: string, modelLevel: string) => void | Promise<void>;
+  instanceLimit?: number;
+  instanceCount?: number;
 }
 
 const SPINNER_CHARS = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
+export default function ConfigPopup({ onClose, onSave, instanceLimit, instanceCount }: ConfigPopupProps) {
   const { t } = useI18n();
   const [allLanguages, setAllLanguages] = useState<LanguageInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,6 +48,7 @@ export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
   }, [saving]);
 
   const selectedLang = allLanguages[selectedLangIdx];
+  const atCap = typeof instanceLimit === "number" && typeof instanceCount === "number" && instanceCount >= instanceLimit;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -62,9 +68,15 @@ export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
 
         {!loading && allLanguages.length === 0 && <p className="text-[11px] leading-relaxed" style={{ color: "#f59e0b" }}>⚠ {t("popup.none")}</p>}
 
+        {atCap && (
+          <p className="text-[11px] leading-relaxed" style={{ color: "#f59e0b" }}>
+            {t("popup.maxReached", { n: instanceLimit })}
+          </p>
+        )}
+
         <div className="h-2" />
         <button onClick={async () => {
-            if (!selectedLang || saving) return;
+            if (!selectedLang || saving || atCap) return;
             setSaving(true);
             try {
               await onSave(tagFor(selectedLang.name), selectedLang.name, "", "", "", "");
@@ -72,9 +84,9 @@ export default function ConfigPopup({ onClose, onSave }: ConfigPopupProps) {
               setSaving(false);
             }
           }}
-          disabled={loading || !selectedLang || saving}
+          disabled={loading || !selectedLang || saving || atCap}
           className="w-full py-3 text-xs font-bold tracking-wider uppercase rounded-sm transition-colors"
-          style={{ background: selectedLang ? "var(--color-accent)" : "var(--color-border)", color: selectedLang ? "#000" : "var(--color-text-secondary)", border: `1px solid ${selectedLang ? "var(--color-accent)" : "var(--color-border)"}`, opacity: selectedLang && !saving ? 1 : 0.5, cursor: selectedLang && !saving ? "pointer" : "not-allowed" }}>
+          style={{ background: selectedLang && !atCap ? "var(--color-accent)" : "var(--color-border)", color: selectedLang && !atCap ? "#000" : "var(--color-text-secondary)", border: `1px solid ${selectedLang && !atCap ? "var(--color-accent)" : "var(--color-border)"}`, opacity: selectedLang && !saving && !atCap ? 1 : 0.5, cursor: selectedLang && !saving && !atCap ? "pointer" : "not-allowed" }}>
           {saving ? t("popup.configuring", { spinner: spinnerChar }) : t("popup.configure")}
         </button>
       </div>

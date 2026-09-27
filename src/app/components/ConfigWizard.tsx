@@ -5,7 +5,7 @@ import { getBrowserMics } from "../../lib/api";
 import { useI18n } from "../../lib/i18n";
 
 interface ConfigWizardProps {
-  onLaunch: (config: { deviceId: string; deviceName: string; threshold: number }) => void;
+  onLaunch: (config: { deviceId: string; deviceName: string; threshold: number; mode?: "words" | "seconds"; timeout?: number }) => void;
 }
 
 export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
@@ -20,6 +20,12 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
     return 10;
   });
   const [micError, setMicError] = useState("");
+  const [mode, setMode] = useState<"words" | "seconds">(() => {
+    if (typeof window === "undefined") return "words";
+    const saved = localStorage.getItem("mic_config");
+    if (saved) try { return JSON.parse(saved).mode === "seconds" ? "seconds" : "words"; } catch {}
+    return "words";
+  });
 
   useEffect(() => {
     const t = setTimeout(() => setPhase("config"), 2000);
@@ -77,6 +83,14 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
 
         <p className="text-xs font-extrabold tracking-widest uppercase" style={{ color: "#666666" }}>{t("wizard.paramsTitle")}</p>
         <p className="text-xs leading-relaxed" style={{ color: "#888888" }}>{t("wizard.paramsDesc")}</p>
+
+        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#888888" }}>{t("wizard.forceMode")}</p>
+        <div className="flex items-center gap-1 border rounded-sm p-0.5" style={{ border: "1px solid #333333", background: "#000000" }}>
+          <button onClick={() => setMode("words")} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors" style={{ flex: 1, color: mode === "words" ? "#000000" : "#888888", background: mode === "words" ? "#ffffff" : "transparent" }}>{t("wizard.forceWords")}</button>
+          <button onClick={() => setMode("seconds")} className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors" style={{ flex: 1, color: mode === "seconds" ? "#000000" : "#888888", background: mode === "seconds" ? "#ffffff" : "transparent" }}>{t("wizard.forceSeconds")}</button>
+        </div>
+
+        {mode === "words" && (
         <div className="flex items-center gap-3">
           <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "#888888" }}>{t("wizard.threshold")}</p>
           <div className="flex items-center border rounded-sm" style={{ border: "1px solid #333333", background: "#000000" }}>
@@ -85,10 +99,11 @@ export default function ConfigWizard({ onLaunch }: ConfigWizardProps) {
             <button onClick={() => setThreshold(Math.min(10, threshold + 1))} className="px-2 py-1.5 text-xs hover:bg-[#1a1a1a] transition-colors" style={{ color: "#ffffff" }}>+</button>
           </div>
         </div>
+        )}
 
         <div className="h-4" />
         <button onClick={() => {
-            const config = { deviceId: mics[selectedMic]?.deviceId ?? "", deviceName: mics[selectedMic]?.label ?? "", threshold };
+            const config = { deviceId: mics[selectedMic]?.deviceId ?? "", deviceName: mics[selectedMic]?.label ?? "", threshold, mode, timeout: 2 };
             localStorage.setItem("mic_config", JSON.stringify(config));
             onLaunch(config);
           }}

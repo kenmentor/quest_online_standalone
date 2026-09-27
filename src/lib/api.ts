@@ -56,6 +56,7 @@ export interface SystemStatus {
   state: string;
   engines: EngineInfo[];
   total_clients: number;
+  instance_limit?: number;
 }
 
 export interface ReplayEntry {

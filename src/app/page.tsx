@@ -54,11 +54,13 @@ interface FeedItem {
   id: number;
   source: string;
   targets: Record<string, string>;
+  ts: number;
 }
 
 function FeedRow({ item, tag }: { item: FeedItem; tag: string }) {
   const { t } = useI18n();
   const translated = item.targets[tag];
+  const stale = Date.now() - item.ts > 6000;
   return (
     <motion.div
       className={styles.feedItem}
@@ -74,6 +76,8 @@ function FeedRow({ item, tag }: { item: FeedItem; tag: string }) {
         <span className={styles.feedTag}>{t("console.targetLabel", { tag: tag.toUpperCase() })}</span>
         {translated != null ? (
           <span className={styles.feedTarget}>{`"${translated}"`}</span>
+        ) : stale ? (
+          <span className={styles.feedTranslating}>{`"${t("console.waitingSpeech")}"`}</span>
         ) : (
           <span className={styles.feedTranslating}>{t("console.translating")}</span>
         )}
@@ -160,10 +164,10 @@ export default function Home() {
       return true;
     }
   });
-  const [micConfig, setMicConfig] = useState<{ deviceId: string; deviceName: string; threshold: number } | null>(() => {
+  const [micConfig, setMicConfig] = useState<{ deviceId: string; deviceName: string; threshold: number; mode?: "words" | "seconds"; timeout?: number }>(() => {
     if (typeof window === "undefined") return null;
     const saved = localStorage.getItem("mic_config");
-    if (saved) try { return JSON.parse(saved); } catch {}
+    if (saved) try { const p = JSON.parse(saved); return { ...p, mode: p.mode ?? "words", timeout: p.timeout ?? 2 }; } catch {}
     return null;
   });
   const [instances, setInstances] = useState<{ tag: string; name: string; modelName: string; clients: number; roomName?: string; running?: boolean; connected?: boolean }[]>([]);
@@ -179,6 +183,8 @@ export default function Home() {
   const [copiedList, setCopiedList] = useState(false);
   const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [roomIdentities, setRoomIdentities] = useState<Record<string, string[]>>({});
+  const [instanceLimit, setInstanceLimit] = useState(8);
+  const currentTagRef = useRef<string | null>(null);
 
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const monitorRoomRef = useRef<Room | null>(null);
@@ -448,7 +454,9 @@ export default function Home() {
       const wsUrl = getApiBase().replace(/^http/, 'ws');
       const token = localStorage.getItem('auth_token') || '';
       const threshold = micConfig.threshold ?? 10;
-      const ws = new WebSocket(`${wsUrl}/api/ws/audio?token=${encodeURIComponent(token)}&threshold=${threshold}`);
+      const mode = micConfig.mode === "seconds" ? "seconds" : "words";
+      const timeout = micConfig.timeout ?? 2;
+      const ws = new WebSocket(`${wsUrl}/api/ws/audio?token=${encodeURIComponent(token)}&threshold=${threshold}&mode=${mode}&timeout=${timeout}`);
       audioWsRef.current = ws;
 
       let ready = false;
@@ -502,7 +510,7 @@ export default function Home() {
     audioContextRef.current = null;
   }
 
-  const handleLaunch = useCallback((c: { deviceId: string; deviceName: string; threshold: number }) => {
+  const handleLaunch = useCallback((c: { deviceId: string; deviceName: string; threshold: number; mode?: "words" | "seconds"; timeout?: number }) => {
     setMicConfig(c);
     setPhase("console");
     addLog(`[INFO] Mic selected: ${c.deviceName}`);
@@ -510,6 +518,10 @@ export default function Home() {
   }, [showToast, addLog, t]);
 
   const addInstance = useCallback(async (tag: string, name: string) => {
+    if (instances.length >= instanceLimit) {
+      showToast(t("console.toastMaxInstances", { n: instanceLimit }), "error");
+      return;
+    }
     let nextInstances: typeof instances = [];
     setInstances(prev => {
       if (prev.some(i => i.tag === tag)) return prev;
@@ -529,20 +541,52 @@ export default function Home() {
       });
       showToast(t("console.toastAddedEngine", { name, tag }), "info");
       addLog(`[INFO] Added engine: ${name} (${tag})`);
+      setFeed([]);
+      setRoomIdentities({});
       if (!selectedTag) { setSelectedTag(tag); }
     } catch (e: unknown) {
+      const status = (e as { status?: number })?.status;
+      if (status === 409) {
+        setInstances(prev => prev.filter(i => i.tag !== tag));
+        api.getEngines().then((engines) => {
+          if (!Array.isArray(engines) || engines.length === 0) return;
+          setInstances(engines.map((e: { tag: string; name: string; room_name?: string; running?: boolean }) => ({
+            tag: e.tag,
+            name: e.name,
+            modelName: "",
+            clients: 0,
+            roomName: e.room_name || `${e.name.toLowerCase().replace(' ', '-')}-room`,
+            running: e.running,
+            connected: false,
+          })));
+        }).catch(() => {});
+        showToast(t("console.toastAlreadyActive", { name }), "info");
+        addLog(`[INFO] Engine ${name} was already restored on the server — list refreshed.`);
+        return;
+      }
       showToast(t("console.toastAddEngineFailed", { msg: errMsg(e) }), "error");
       setInstances(prev => prev.filter(i => i.tag !== tag));
     }
     setShowConfigPopup(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedTag, showToast, addLog, t]);
+  }, [selectedTag, instances.length, instanceLimit, showToast, addLog, t]);
 
   const removeInstance = useCallback(async (tag: string) => {
     const inst = instances.find(i => i.tag === tag);
     setInstances(prev => prev.filter(i => i.tag !== tag));
     try {
       await api.removeEngine(tag);
+      setFeed(p => p.map(item => {
+        const { [tag]: _gone, ...rest } = item.targets;
+        return { ...item, targets: rest };
+      }).filter(item => Object.keys(item.targets).length > 0 || item.source));
+      setRoomIdentities(prev => {
+        const next = { ...prev };
+        delete next[tag];
+        return next;
+      });
+      setViewTag(v => v === tag ? "" : v);
+      setSelectedTag(s => s === tag ? "" : s);
       showToast(t("console.toastRemovedEngine", { name: inst?.name || tag }), "info");
       addLog(`[INFO] Removed engine: ${inst?.name || tag} (${tag})`);
     } catch (e: unknown) {
@@ -573,6 +617,9 @@ export default function Home() {
     api.getStatus().then((status) => {
       if (status.state === "RECORDING" || status.state === "PAUSED") {
         setEngineState(status.state);
+        if (status.state === "RECORDING") {
+          startAudioCapture();
+        }
       }
     }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -591,7 +638,7 @@ export default function Home() {
           addLog(`[SRC] ${source}`);
           setFeed(p => {
             const id = ++feedIdRef.current;
-            return [...p, { id, source, targets: {} }].slice(-40);
+            return [...p, { id, source, targets: {}, ts: Date.now() }].slice(-40);
           });
         },
         (tag, source, translated) => {
@@ -658,12 +705,28 @@ export default function Home() {
       try {
         const status = await api.getStatus();
         if (cancelled || document.hidden) return;
-        setInstances(prev => prev.map(inst => {
-          const serverInst = status.engines.find((e: { tag: string }) => e.tag === inst.tag);
-          return { ...inst, clients: serverInst?.clients ?? 0, roomName: serverInst?.room_name ?? inst.roomName, running: serverInst?.running ?? inst.running, connected: serverInst?.connected ?? inst.connected };
-        }));
+        setInstances(prev => {
+          if (prev.length === 0 && status.engines.length > 0) {
+            return status.engines.map((e: { tag: string; name: string; room_name?: string; running?: boolean; connected?: boolean; clients?: number }) => ({
+              tag: e.tag,
+              name: e.name,
+              modelName: "",
+              clients: e.clients ?? 0,
+              roomName: e.room_name || `${e.name.toLowerCase().replace(' ', '-')}-room`,
+              running: e.running,
+              connected: e.connected,
+            }));
+          }
+          return prev.map(inst => {
+            const serverInst = status.engines.find((e: { tag: string }) => e.tag === inst.tag);
+            return { ...inst, clients: serverInst?.clients ?? 0, roomName: serverInst?.room_name ?? inst.roomName, running: serverInst?.running ?? inst.running, connected: serverInst?.connected ?? inst.connected };
+          });
+        });
         if (status.state === "RECORDING" && engineStateRef.current !== "RECORDING" && engineStateRef.current !== "INIT" && engineStateRef.current !== "PAUSED") {
           setEngineState("RECORDING");
+        }
+        if (typeof status.instance_limit === "number") {
+          setInstanceLimit(status.instance_limit);
         }
         try {
           const replay = await api.getLiveReplay();
@@ -675,7 +738,7 @@ export default function Home() {
       } catch {}
     };
     poll();
-    const i = setInterval(poll, 5000);
+    const i = setInterval(poll, 3000);
     return () => { cancelled = true; clearInterval(i); };
   }, [phase, authed, t]);
 
@@ -689,13 +752,14 @@ export default function Home() {
 
   useEffect(() => {
     const el = feedScrollRef.current;
-    if (!el || !nearBottomRef.current) return;
-    const raf = requestAnimationFrame(() => {
-      if (!nearBottomRef.current) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [feed]);
+    if (!el) return;
+    if (currentTagRef.current && currentTagRef.current !== currentTag) {
+      currentTagRef.current = currentTag;
+      nearBottomRef.current = true;
+    }
+    if (!nearBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
+  }, [feed, currentTag]);
 
   // Internet speed measurement (Cloudflare, mirrors SpeedWorker)
   useEffect(() => {
@@ -803,7 +867,8 @@ export default function Home() {
 
           <button
             className={styles.addBtn}
-            disabled={isConnecting || !addBtnEnabled}
+            disabled={isConnecting || !addBtnEnabled || instances.length >= instanceLimit}
+            title={instances.length >= instanceLimit ? t("console.toastMaxInstances", { n: instanceLimit }) : undefined}
             onClick={() => setShowConfigPopup(true)}
           >
             {t("console.newInstance")}
@@ -961,7 +1026,7 @@ export default function Home() {
         </aside>
       </div>
 
-      {showConfigPopup && <ConfigPopup onClose={() => setShowConfigPopup(false)} onSave={addInstance} />}
+      {showConfigPopup && <ConfigPopup onClose={() => setShowConfigPopup(false)} onSave={addInstance} instanceLimit={instanceLimit} instanceCount={instances.length} />}
       {toasts.map(t => <Toast key={t.id} message={t.message} level={t.level} onClose={() => removeToast(t.id)} />)}
     </div>
   );
