@@ -95,12 +95,13 @@ function fmtMbps(mbps: number): string {
   return mbps >= 1 ? `${mbps.toFixed(1)} Mbps` : `${Math.round(mbps * 1000)} Kbps`;
 }
 
-function buildListenLink(room: string | undefined): string {
+function buildListenLink(): string {
   if (typeof window === "undefined") return "";
   const base = getApiBase();
-  if (!room || !base) return "";
+  if (!base) return "";
   const origin = window.location.origin;
-  return `${origin}/meeting/${encodeURIComponent(room)}?s=${encodeURIComponent(base)}`;
+  // Dedicated language/room landing — the listener picks a live room there.
+  return `${origin}/meeting?s=${encodeURIComponent(base)}`;
 }
 
 type Translate = (key: string, vars?: Record<string, unknown>) => string;
@@ -378,7 +379,7 @@ export default function Home() {
   const copyListenLink = useCallback(() => {
     const inst = selectedInstance;
     if (!inst?.roomName) { showToast(t("console.noServer"), "error"); return; }
-    const link = buildListenLink(inst.roomName);
+    const link = buildListenLink();
     if (!link) { showToast(t("console.noServer"), "error"); return; }
     navigator.clipboard?.writeText(link).then(() => {
       showToast(t("console.listenCopied"), "info");
@@ -1011,7 +1012,7 @@ export default function Home() {
             <input
               className={styles.readonlyInput}
               readOnly
-              value={buildListenLink(selectedInstance?.roomName)}
+              value={buildListenLink()}
               placeholder={t("console.noServer")}
               onFocus={(e) => e.currentTarget.select()}
               style={{ flex: 1, minWidth: 0 }}

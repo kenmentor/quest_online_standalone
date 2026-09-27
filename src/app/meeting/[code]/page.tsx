@@ -42,6 +42,7 @@ const BASE_ROOM_LANG: Record<string, { name: string; flag: string }> = {
   german: { name: "German", flag: "🇩🇪" },
   spanish: { name: "Spanish", flag: "🇪🇸" },
   italian: { name: "Italian", flag: "🇮🇹" },
+  swahili: { name: "Swahili", flag: "🇰🇪" },
 };
 
 const ENV_LIVEKIT_URL = process.env.NEXT_PUBLIC_LIVEKIT_URL || "";
