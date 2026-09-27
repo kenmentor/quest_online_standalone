@@ -101,6 +101,8 @@ Object.assign(dict.en, {
   "console.toastRemovedEngine": "Removed engine: {name}",
   "console.toastRemoveEngineFailed": "ERROR: Failed to remove engine: {msg}",
   "console.removeInstance": "Remove instance",
+  "console.toastOneInstanceRequired": "At least one instance must remain active. Add another before removing this one.",
+  "console.oneInstanceRequiredTitle": "Cannot remove — at least one instance must remain active.",
 
   "console.engineConsole": "ENGINE CONSOLE",
   "console.badgeDisconnected": "STATUS: DISCONNECTED",
@@ -263,6 +265,8 @@ Object.assign(dict.de, {
   "console.toastRemovedEngine": "Engine entfernt: {name}",
   "console.toastRemoveEngineFailed": "FEHLER: Engine konnte nicht entfernt werden: {msg}",
   "console.removeInstance": "Instanz entfernen",
+  "console.toastOneInstanceRequired": "Mindestens eine Instanz muss aktiv bleiben. Füge eine weitere hinzu, bevor du diese entfernst.",
+  "console.oneInstanceRequiredTitle": "Nicht entfernbar — mindestens eine Instanz muss aktiv bleiben.",
 
   "console.engineConsole": "ENGINE-KONSOLE",
   "console.badgeDisconnected": "STATUS: GETRENNT",
@@ -425,6 +429,8 @@ Object.assign(dict.es, {
   "console.toastRemovedEngine": "Motor eliminado: {name}",
   "console.toastRemoveEngineFailed": "ERROR: No se pudo eliminar el motor: {msg}",
   "console.removeInstance": "Eliminar instancia",
+  "console.toastOneInstanceRequired": "Al menos una instancia debe permanecer activa. Añade otra antes de eliminar esta.",
+  "console.oneInstanceRequiredTitle": "No se puede eliminar — al menos una instancia debe permanecer activa.",
 
   "console.engineConsole": "CONSOLA DEL MOTOR",
   "console.badgeDisconnected": "ESTADO: DESCONECTADO",
@@ -585,6 +591,8 @@ Object.assign(dict.fr, {
   "console.toastRemovedEngine": "Moteur retiré : {name}",
   "console.toastRemoveEngineFailed": "ERREUR : impossible de retirer le moteur : {msg}",
   "console.removeInstance": "Retirer l'instance",
+  "console.toastOneInstanceRequired": "Au moins une instance doit rester active. Ajoutez une autre avant de supprimer celle-ci.",
+  "console.oneInstanceRequiredTitle": "Suppression impossible — au moins une instance doit rester active.",
 
   "console.engineConsole": "CONSOLE DU MOTEUR",
   "console.badgeDisconnected": "STATUT : DÉCONNECTÉ",
@@ -745,6 +753,8 @@ Object.assign(dict.it, {
   "console.toastRemovedEngine": "Motore rimosso: {name}",
   "console.toastRemoveEngineFailed": "ERRORE: impossibile rimuovere il motore: {msg}",
   "console.removeInstance": "Rimuovi istanza",
+  "console.toastOneInstanceRequired": "Almeno un'istanza deve rimanere attiva. Aggiungine un'altra prima di rimuovere questa.",
+  "console.oneInstanceRequiredTitle": "Impossibile rimuovere — almeno un'istanza deve rimanere attiva.",
 
   "console.engineConsole": "CONSOLE DEL MOTORE",
   "console.badgeDisconnected": "STATO: DISCONNESSO",

@@ -577,6 +577,10 @@ export default function Home() {
   }, [selectedTag, instances.length, instanceLimit, showToast, addLog, t]);
 
   const removeInstance = useCallback(async (tag: string) => {
+    if (instances.length <= 1) {
+      showToast(t("console.toastOneInstanceRequired"), "error");
+      return;
+    }
     const inst = instances.find(i => i.tag === tag);
     setInstances(prev => prev.filter(i => i.tag !== tag));
     try {
@@ -850,24 +854,29 @@ export default function Home() {
           <span className={styles.sectionTitle}>{t("console.instancesTitle")}</span>
 
           <div className={styles.instanceList}>
-            {instances.map((inst, idx) => (
-              <div key={inst.tag} className={styles.instanceRow}>
-                <button
-                  className={`${styles.instanceItem} ${inst.tag === (selectedTag ?? instances[0]?.tag) ? styles.instanceItemActive : ""}`}
-                  onClick={() => setSelectedTag(inst.tag)}
-                >
-                  {`Instance ${String(idx + 1).padStart(2, "0")} (EN - ${inst.name})`}
-                </button>
-                <button
-                  className={styles.instanceDeleteBtn}
-                  onClick={(e) => { e.stopPropagation(); removeInstance(inst.tag); }}
-                  title={t("console.removeInstance") || "Remove"}
-                  aria-label={t("console.removeInstance") || "Remove"}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))}
+            {instances.map((inst, idx) => {
+              const isLast = instances.length <= 1;
+              return (
+                <div key={inst.tag} className={styles.instanceRow}>
+                  <button
+                    className={`${styles.instanceItem} ${inst.tag === (selectedTag ?? instances[0]?.tag) ? styles.instanceItemActive : ""}`}
+                    onClick={() => setSelectedTag(inst.tag)}
+                  >
+                    {`Instance ${String(idx + 1).padStart(2, "0")} (EN - ${inst.name})`}
+                  </button>
+                  <button
+                    className={styles.instanceDeleteBtn}
+                    onClick={(e) => { e.stopPropagation(); removeInstance(inst.tag); }}
+                    disabled={isLast}
+                    title={isLast ? t("console.oneInstanceRequiredTitle") : t("console.removeInstance") || "Remove"}
+                    aria-label={isLast ? t("console.oneInstanceRequiredTitle") : t("console.removeInstance") || "Remove"}
+                    style={isLast ? { opacity: 0.4, cursor: "not-allowed" } : undefined}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           <button
