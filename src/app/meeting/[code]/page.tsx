@@ -292,16 +292,16 @@ function LanguageSelector({
               {activeTab === "room"
                 ? Object.entries(BASE_ROOM_LANG).map(([name, meta]) => {
                     const base = `${name}-room`;
-                    const code = `${base}${getRoomPrefix(currentRoom)}`;
+                    const currentBase = parseRoomCode(currentRoom).base;
                     return (
                       <button
                         key={base}
                         onClick={() => {
-                          onRoomChange(code);
+                          onRoomChange(name);
                           setIsOpen(false);
                         }}
                         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${
-                          currentRoom === base
+                          currentBase === base
                             ? "bg-white text-black"
                             : "text-white hover:bg-[#252525]"
                         }`}
@@ -310,7 +310,7 @@ function LanguageSelector({
                         <span className="text-sm font-medium">
                           {t("meeting.roomName", { room: meta.name })}
                         </span>
-                        {currentRoom === base && (
+                        {currentBase === base && (
                           <Volume2 className="w-4 h-4 ml-auto" />
                         )}
                       </button>
@@ -728,6 +728,29 @@ export default function MeetingPage() {
 
   // Connection
 
+  // Resolve the authoritative engine room for a room code. A shared link may
+  // drop the per-user prefix (e.g. `spanish-room` instead of
+  // `spanish-room-<uid8>`); the operator server knows the real room name.
+  const resolveRoom = useCallback(
+    async (room: string): Promise<string> => {
+      if (!livekitConfig?.serverBase) return room;
+      try {
+        const res = await fetch(
+          `${livekitConfig.serverBase.replace(/\/+$/, "")}/api/room?${new URLSearchParams({ room })}`,
+          { headers: { "ngrok-skip-browser-warning": "true" } },
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.room_name) return data.room_name;
+        }
+      } catch {
+        // fall back to the raw room code
+      }
+      return room;
+    },
+    [livekitConfig?.serverBase],
+  );
+
   const connect = useCallback(
     async (name: string) => {
       setUserName(name);
@@ -755,13 +778,17 @@ export default function MeetingPage() {
           startAudioKeepalive(audioContextRef.current, keepaliveOscRef, keepaliveGainRef);
         }
 
+        // Resolve the authoritative engine room (the shared link may have
+        // dropped the per-user prefix; the server knows the real room name).
+        const actualRoom = await resolveRoom(roomCode);
+
         // Fetch a token: the operator server first (same LiveKit project, keys
         // and room as the console monitor), else this app's own env credentials.
         let token: string;
         if (livekitConfig?.serverBase && livekitConfig.serverUrl) {
           const response = await fetch(
             `${livekitConfig.serverBase.replace(/\/+$/, "")}/api/token?${new URLSearchParams({
-              room: roomCode,
+              room: actualRoom,
               identity: `${name}_${tabId}`,
             })}`,
             { headers: { "ngrok-skip-browser-warning": "true" } },
@@ -771,7 +798,7 @@ export default function MeetingPage() {
         } else if (ENV_LIVEKIT_URL) {
           const resp = await fetch(
             `/api/token?${new URLSearchParams({
-              room: roomCode,
+              room: actualRoom,
               identity: `${name}_${tabId}`,
               name,
             })}`,
@@ -961,7 +988,7 @@ export default function MeetingPage() {
         setConnectionState(ConnectionState.Disconnected);
       }
     },
-    [livekitConfig, roomCode, tabId, t],
+    [livekitConfig, roomCode, resolveRoom, tabId, t],
   );
   
   const handleLeave = useCallback(() => {
@@ -998,16 +1025,18 @@ export default function MeetingPage() {
   }, [router]);
 
   const handleRoomChange = useCallback(
-    (newRoom: string) => {
+    async (newBaseName: string) => {
       if (roomRef.current) {
         roomRef.current.disconnect();
         roomRef.current = null;
       }
       isReconnectingRef.current = false;
+      const candidate = `${newBaseName}-room${getRoomPrefix(roomCode)}`;
+      const dest = await resolveRoom(candidate);
       const q = typeof window !== "undefined" ? window.location.search : "";
-      router.push(`/meeting/${newRoom}${q}`);
+      router.push(`/meeting/${dest}${q}`);
     },
-    [router],
+    [router, roomCode, resolveRoom],
   );
 
   const toggleMic = useCallback(async () => {
