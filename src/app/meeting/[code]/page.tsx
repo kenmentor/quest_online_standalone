@@ -152,10 +152,12 @@ function startAudioKeepalive(
 function NameEntry({
   roomCode,
   onSubmit,
+  onRoomChange,
   isConfigLoading,
 }: {
   roomCode: string;
   onSubmit: (name: string) => void;
+  onRoomChange: (newRoom: string) => void;
   isConfigLoading: boolean;
 }) {
   const { t } = useI18n();
@@ -196,11 +198,23 @@ function NameEntry({
           <p className="text-gray-500 text-sm">{t("meeting.enterName")}</p>
         </div>
 
+        <div className="flex justify-center mb-6">
+          <LanguageSelector
+            selectedLanguage=""
+            onChange={() => {}}
+            onRoomChange={onRoomChange}
+            currentRoom={roomCode}
+          />
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              localStorage.setItem("userName", e.target.value);
+            }}
             placeholder={t("meeting.yourName")}
             className="w-full px-4 py-3 bg-[#1a1a1a] text-white rounded-xl border border-[#333] focus:border-white focus:outline-none text-base sm:text-lg"
             autoFocus
@@ -1090,6 +1104,7 @@ export default function MeetingPage() {
       <NameEntry
         roomCode={roomCode}
         onSubmit={connect}
+        onRoomChange={handleRoomChange}
         isConfigLoading={isConfigLoading}
       />
     );
